@@ -23,7 +23,7 @@ export async function initDb() {
     // Enable foreign keys
     await db.exec('PRAGMA foreign_keys = ON;');
 
-    console.log('📦 Inicializando base de datos SQLite...');
+    console.log('Inicializando base de datos SQLite...');
 
     // Create tables
     await db.exec(`
@@ -62,7 +62,7 @@ export async function initDb() {
     const userCount = await db.get('SELECT COUNT(*) as count FROM users');
 
     if (userCount.count === 0) {
-        console.log('🌱 Poblando base de datos con ingenieros iniciales (Seed)...');
+        console.log('Poblando base de datos con ingenieros iniciales (Seed)...');
 
         await db.exec(`
       INSERT INTO users (name, email, role, experience_years) VALUES 
@@ -90,9 +90,9 @@ export async function initDb() {
         (7, 2, 3),
         (8, 1, 5), (8, 3, 4);
     `);
-        console.log('✅ Base de datos inicializada y poblada.');
+        console.log('Base de datos inicializada y poblada.');
     } else {
-        console.log('✅ Base de datos lista.');
+        console.log('Base de datos lista.');
     }
 
     return db;

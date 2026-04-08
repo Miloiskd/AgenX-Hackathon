@@ -6,6 +6,7 @@ import { triageAndCreateTicket } from './modules/triage/triage.service.js';
 import { getAllTickets, getTicketStats } from './modules/tickets/tickets.service.js';
 import { initDb, getDbConnection } from './db/database.js';
 import { assignTeam } from './modules/assignment/index.js';
+import { generateDiagram } from './modules/diagram/index.js';
 import { notifyReporterResolved } from './modules/gmail/index.js';
 import {
   sanitizeInput,
@@ -229,6 +230,34 @@ app.post('/assign', moderateLimiter, async (req, res) => {
 });
 
 /**
+ * POST /diagram
+ * Generate a system architecture diagram prompt from incident data
+ * Rate limited: 60 requests per 15 minutes per IP
+ */
+app.post('/diagram', moderateLimiter, async (req, res) => {
+  try {
+    const { category, priority, summary, possible_cause } = req.body;
+
+    if (!category || !priority || !summary || !possible_cause) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        messages: ['Fields category, priority, summary, and possible_cause are required'],
+      });
+    }
+
+    const result = await generateDiagram({ category, priority, summary, possible_cause });
+
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error('Error in /diagram:', error);
+    res.status(500).json({
+      error: 'Failed to generate diagram',
+      message: 'An error occurred while generating the diagram. Please try again later.',
+    });
+  }
+});
+
+/**
  * POST /tickets/:id/resolve
  * Mark ticket as resolved and notify reporter
  * Rate limited: 60 requests per 15 minutes per IP
@@ -326,6 +355,7 @@ initDb()
       console.log(`📊 GET /tickets/stats - Get ticket statistics`);
       console.log(`🤖 POST /assign - Assign team`);
       console.log(`✅ POST /tickets/:id/resolve - Send resolution email`);
+      console.log(`📊 POST /diagram - Generate system diagram prompt`);
       console.log(`❤️ GET /health - Health check`);
     });
   })

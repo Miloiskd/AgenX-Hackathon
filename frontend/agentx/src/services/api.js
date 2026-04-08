@@ -68,6 +68,25 @@ export const getTickets = async () => {
   }
 };
 
+// Generate system diagram prompt for an incident
+export const generateDiagramApi = async (category, priority, summary, possible_cause) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/diagram`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ category, priority, summary, possible_cause }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Error: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    throw new Error(`Failed to generate diagram: ${error.message}`);
+  }
+};
+
 // Assign team to a ticket
 export const assignTeamApi = async (ticketId, category, priority, summary) => {
   try {

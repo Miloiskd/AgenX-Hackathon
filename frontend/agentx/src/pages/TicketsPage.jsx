@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { getTickets } from '../services/api';
+import { getTickets, assignTeamApi } from '../services/api';
 
 export function TicketsPage() {
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [assigning, setAssigning] = useState({});
 
   useEffect(() => {
     const fetchTickets = async () => {
@@ -13,7 +14,7 @@ export function TicketsPage() {
 
       try {
         const data = await getTickets();
-        setTickets(data || []);
+        setTickets(Array.isArray(data.tickets) ? data.tickets : [data.tickets]);
       } catch (err) {
         setError(err.message);
       } finally {
@@ -30,11 +31,24 @@ export function TicketsPage() {
 
     try {
       const data = await getTickets();
-      setTickets(data || []);
+      setTickets(Array.isArray(data.tickets) ? data.tickets : [data.tickets]);
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAssignTeam = async (ticket) => {
+    setAssigning((prev) => ({ ...prev, [ticket.id]: true }));
+    setError(null);
+    try {
+      await assignTeamApi(ticket.id, ticket.category, ticket.priority, ticket.summary);
+      await handleRefresh();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setAssigning((prev) => ({ ...prev, [ticket.id]: false }));
     }
   };
 
@@ -76,9 +90,20 @@ export function TicketsPage() {
                 {ticket.description && (
                   <p><strong>Description:</strong> {ticket.description}</p>
                 )}
-                {ticket.url && (
-                  <p><a href={ticket.url} target="_blank" rel="noopener noreferrer">View in Jira →</a></p>
+                {ticket.assignedTeam && (
+                  <p><strong>Assigned Team:</strong> {Array.isArray(ticket.assignedTeam) ? ticket.assignedTeam.join(', ') : ticket.assignedTeam}</p>
                 )}
+              </div>
+              <div className="ticket-actions" style={{ marginTop: '1rem' }}>
+                <button
+                  onClick={() => handleAssignTeam(ticket)}
+                  disabled={assigning[ticket.id]}
+                  className="assign-button"
+                  style={{ padding: '0.5rem 1rem', background: '#007bff', color: 'white', border: 'none', borderRadius: '4px', cursor: assigning[ticket.id] ? 'not-allowed' : 'pointer' }}
+                >
+                  {assigning[ticket.id] ? 'Assigning...' : 'Assign Team'}
+                </button>
+
               </div>
             </div>
           ))}

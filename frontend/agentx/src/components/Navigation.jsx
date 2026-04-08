@@ -28,6 +28,14 @@ export function Navigation({ currentPage, setCurrentPage }) {
               Dashboard
             </button>
           </li>
+          <li>
+            <button
+              className={`nav-button ${currentPage === 'assignment' ? 'active' : ''}`}
+              onClick={() => setCurrentPage('assignment')}
+            >
+              Asignación de Equipos
+            </button>
+          </li>
         </ul>
       </div>
     </nav>

@@ -4,6 +4,7 @@ import { Navigation } from './components/Navigation'
 import { UploadPage } from './pages/UploadPage'
 import { TicketsPage } from './pages/TicketsPage'
 import { DashboardPage } from './pages/DashboardPage'
+import { AssignmentPage } from './pages/AssignmentPage'
 
 function App() {
   const [currentPage, setCurrentPage] = useState('upload')
@@ -16,6 +17,8 @@ function App() {
         return <TicketsPage />
       case 'dashboard':
         return <DashboardPage />
+      case 'assignment':
+        return <AssignmentPage />
       default:
         return <UploadPage />
     }

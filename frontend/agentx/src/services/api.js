@@ -1,21 +1,46 @@
 const API_BASE_URL = 'http://localhost:3000';
 
-// Upload/Ingest data
-export const submitTicket = async (text) => {
+// Upload/Ingest data with optional files
+export const submitTicket = async (text, photo = null, logs = null) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/ingest`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ text }),
-    });
+    // If we have files, use FormData; otherwise use JSON
+    if (photo || logs) {
+      const formData = new FormData();
+      formData.append('text', text);
+      if (photo) {
+        formData.append('photo', photo);
+      }
+      if (logs) {
+        formData.append('logs', logs);
+      }
 
-    if (!response.ok) {
-      throw new Error(`Error: ${response.status}`);
+      const response = await fetch(`${API_BASE_URL}/ingest`, {
+        method: 'POST',
+        body: formData,
+        // Don't set Content-Type header - browser will set it correctly for multipart/form-data
+      });
+
+      if (!response.ok) {
+        throw new Error(`Error: ${response.status}`);
+      }
+
+      return await response.json();
+    } else {
+      // Use JSON for text-only requests
+      const response = await fetch(`${API_BASE_URL}/ingest`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ text }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Error: ${response.status}`);
+      }
+
+      return await response.json();
     }
-
-    return await response.json();
   } catch (error) {
     throw new Error(`Failed to submit ticket: ${error.message}`);
   }
@@ -35,7 +60,9 @@ export const getTickets = async () => {
       throw new Error(`Error: ${response.status}`);
     }
 
-    return await response.json();
+    const data = await response.json();
+    // Backend returns { success, count, tickets: [...] }
+    return data.tickets || [];
   } catch (error) {
     throw new Error(`Failed to fetch tickets: ${error.message}`);
   }

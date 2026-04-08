@@ -830,3 +830,39 @@
     border-right-color: var(--border);
   }
 }
+
+/* File Input Styles */
+.file-input {
+  width: 100%;
+  padding: 12px;
+  border: 2px solid var(--border);
+  border-radius: 6px;
+  font-size: 14px;
+  color: var(--text-h);
+  background: var(--bg);
+  cursor: pointer;
+  transition: border-color 0.3s;
+  box-sizing: border-box;
+}
+
+.file-input:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.file-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.file-input:disabled {
+  background: var(--code-bg);
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.file-name {
+  margin: 8px 0 0 0;
+  font-size: 13px;
+  color: #16a34a;
+  font-weight: 500;
+}

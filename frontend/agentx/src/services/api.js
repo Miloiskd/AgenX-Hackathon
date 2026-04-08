@@ -68,6 +68,25 @@ export const getTickets = async () => {
   }
 };
 
+// Enrich an incident with Saleor e-commerce data
+export const saleorEnrichApi = async (text, category, priority, summary) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/saleor/enrich`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, category, priority, summary }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Error: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    throw new Error(`Failed to enrich with Saleor: ${error.message}`);
+  }
+};
+
 // Generate system diagram prompt for an incident
 export const generateDiagramApi = async (category, priority, summary, possible_cause) => {
   try {

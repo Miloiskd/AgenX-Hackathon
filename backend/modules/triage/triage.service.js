@@ -1,6 +1,7 @@
 import { runTriageChain } from './triage.chain.js';
 import { createTicket } from '../tickets/tickets.service.js';
 import { notifyReporterTicketCreated, notifyTeamNewTicket } from '../gmail/index.js';
+import { enrichIncident, isEcommerceRelated } from '../saleor/index.js';
 
 /**
  * Process user input through triage and create a ticket
@@ -32,6 +33,18 @@ export async function triageAndCreateTicket(userInput, emailOrAdditionalData = {
       }
     }
 
+    // Step 2.5: Saleor enrichment (e-commerce incidents only, non-blocking on failure)
+    let saleorEnrichment = null;
+    if (isEcommerceRelated(triageResult, userInput)) {
+      try {
+        console.log('🛒 E-commerce incident — enriching with Saleor data...');
+        saleorEnrichment = await enrichIncident(userInput, triageResult);
+        console.log('✅ Saleor enrichment complete');
+      } catch (err) {
+        console.warn('⚠️  Saleor enrichment failed (continuing without it):', err.message);
+      }
+    }
+
     // Step 3: Create a ticket with the triage results
     console.log('📝 Creating ticket...');
     const ticket = await createTicket({
@@ -40,6 +53,7 @@ export async function triageAndCreateTicket(userInput, emailOrAdditionalData = {
       category: triageResult.category,
       priority: triageResult.priority,
       summary: triageResult.summary,
+      saleorEnrichment,
     });
     console.log('✅ Ticket created:', ticket.jiraKey);
 
@@ -54,7 +68,7 @@ export async function triageAndCreateTicket(userInput, emailOrAdditionalData = {
       .then(() => console.log('📧 Alert email sent to SRE team'))
       .catch((err) => console.error('⚠️  Failed to send team alert:', err.message));
 
-    return ticket;
+    return { ...ticket, saleorEnrichment };
   } catch (error) {
     console.error('Error in triage process:', error.message);
     throw new Error(`Failed to process ticket: ${error.message}`);

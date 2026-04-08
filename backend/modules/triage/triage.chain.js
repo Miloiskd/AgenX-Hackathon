@@ -14,7 +14,13 @@ const triagePrompt = PromptTemplate.fromTemplate(`
 You are a support ticket triage agent. Analyze the following user input and classify it.
 
 Return a valid JSON object with exactly these fields:
-- category: One of ["payment", "shipping", "bug", "other"]
+- category: One of ["payment", "shipping", "order", "product", "bug", "other"]
+  • payment  — payment failures, charges, refunds, billing disputes, gateway errors
+  • shipping  — delivery problems, tracking issues, fulfillment delays, lost packages
+  • order     — order creation, cancellation, status, or checkout issues
+  • product   — product availability, stock, pricing, or catalog issues
+  • bug       — technical errors, crashes, or unexpected behavior unrelated to e-commerce
+  • other     — anything that does not fit the above categories
 - priority: One of ["high", "medium", "low"]
 - summary: A brief one-line summary (max 100 characters)
 
@@ -52,7 +58,7 @@ export async function runTriageChain(userInput) {
     }
 
     // Validate enum values
-    const validCategories = ['payment', 'shipping', 'bug', 'other'];
+    const validCategories = ['payment', 'shipping', 'order', 'product', 'bug', 'other'];
     const validPriorities = ['high', 'medium', 'low'];
 
     if (!validCategories.includes(result.category)) {

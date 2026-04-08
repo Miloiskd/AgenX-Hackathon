@@ -1015,6 +1015,83 @@
   overflow: hidden;
 }
 
+/* Saleor Enrichment */
+.enrichment-result {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.enrichment-badge-row {
+  display: flex;
+}
+
+.enrichment-badge {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.enrichment-badge--yes {
+  background: rgba(34, 197, 94, 0.1);
+  color: #16a34a;
+  border: 1px solid rgba(34, 197, 94, 0.4);
+}
+
+.enrichment-badge--no {
+  background: rgba(107, 114, 128, 0.1);
+  color: #6b7280;
+  border: 1px solid rgba(107, 114, 128, 0.3);
+}
+
+.enrichment-card {
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.enrichment-card-title {
+  margin: 0 0 4px 0;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--accent);
+}
+
+.enrichment-entities {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.enrichment-analysis {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.enrichment-analysis-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.enrichment-analysis-text {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.6;
+}
+
 /* File Input Styles */
 .file-input {
   width: 100%;

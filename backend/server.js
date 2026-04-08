@@ -3,6 +3,7 @@ import express from 'express';
 import multer from 'multer';
 import helmet from 'helmet';
 import { triageAndCreateTicket } from './modules/triage/triage.service.js';
+import { enrichIncident, extractEntities } from './modules/saleor/index.js';
 import { getAllTickets, getTicketStats } from './modules/tickets/tickets.service.js';
 import { initDb, getDbConnection } from './db/database.js';
 import { assignTeam } from './modules/assignment/index.js';
@@ -310,6 +311,45 @@ app.post('/tickets/:id/resolve', moderateLimiter, async (req, res) => {
   }
 });
 
+/**
+ * POST /saleor/enrich
+ * On-demand Saleor enrichment for an incident text + triage result.
+ * Useful for manual investigation or re-enrichment of existing tickets.
+ * Rate limited: 60 requests per 15 minutes per IP
+ */
+app.post('/saleor/enrich', moderateLimiter, async (req, res) => {
+  try {
+    const { text, category, priority, summary } = req.body;
+
+    if (!text || typeof text !== 'string' || text.trim().length === 0) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        messages: ['Field "text" is required and must be a non-empty string'],
+      });
+    }
+
+    const sanitizedText = sanitizeInput(text);
+
+    // Accept a pre-computed triage result or fall back to defaults
+    const triageResult = {
+      category: category || 'other',
+      priority: priority || 'medium',
+      summary: summary || sanitizedText.substring(0, 100),
+    };
+
+    const entities = extractEntities(sanitizedText);
+    const enrichment = await enrichIncident(sanitizedText, triageResult);
+
+    res.json({ success: true, entities, ...enrichment });
+  } catch (error) {
+    console.error('Error in /saleor/enrich:', error);
+    res.status(500).json({
+      error: 'Enrichment failed',
+      message: 'An error occurred while enriching the incident with Saleor data.',
+    });
+  }
+});
+
 // 404 handler
 app.use((req, res) => {
   res.status(404).json({
@@ -349,14 +389,15 @@ app.use((err, req, res, next) => {
 initDb()
   .then(() => {
     app.listen(PORT, () => {
-      console.log(`🚀 Server running at http://localhost:${PORT}`);
-      console.log(`📝 POST /ingest - Submit a ticket for triage`);
-      console.log(`📋 GET /tickets - Get all tickets`);
-      console.log(`📊 GET /tickets/stats - Get ticket statistics`);
-      console.log(`🤖 POST /assign - Assign team`);
-      console.log(`✅ POST /tickets/:id/resolve - Send resolution email`);
-      console.log(`📊 POST /diagram - Generate system diagram prompt`);
-      console.log(`❤️ GET /health - Health check`);
+      console.log(`Server running at http://localhost:${PORT}`);
+      console.log(`POST /ingest - Submit a ticket for triage`);
+      console.log(`GET /tickets - Get all tickets`);
+      console.log(`GET /tickets/stats - Get ticket statistics`);
+      console.log(`POST /assign - Assign team`);
+      console.log(`POST /tickets/:id/resolve - Send resolution email`);
+      console.log(`POST /diagram - Generate system diagram prompt`);
+      console.log(`GET /health - Health check`);
+      console.log(`POST /saleor/enrich - Enrich incident with Saleor e-commerce data`);
     });
   })
   .catch((err) => {

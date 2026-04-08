@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getTickets, assignTeamApi, generateDiagramApi } from '../services/api';
+import { getTickets, assignTeamApi, generateDiagramApi, saleorEnrichApi } from '../services/api';
 import { DiagramViewer } from '../components/DiagramViewer';
 
 export function TicketsPage() {
@@ -14,6 +14,11 @@ export function TicketsPage() {
   const [diagramData, setDiagramData] = useState(null);
   const [generatingDiagram, setGeneratingDiagram] = useState(false);
   const [diagramError, setDiagramError] = useState(null);
+
+  // Saleor enrichment state
+  const [enrichmentData, setEnrichmentData] = useState(null);
+  const [enriching, setEnriching] = useState(false);
+  const [enrichmentError, setEnrichmentError] = useState(null);
 
   useEffect(() => {
     fetchTickets();
@@ -57,6 +62,28 @@ export function TicketsPage() {
     setSelectedTicket(null);
     setDiagramData(null);
     setDiagramError(null);
+    setEnrichmentData(null);
+    setEnrichmentError(null);
+  };
+
+  const handleSaleorEnrich = async () => {
+    if (!selectedTicket) return;
+    setEnriching(true);
+    setEnrichmentError(null);
+    setEnrichmentData(null);
+    try {
+      const result = await saleorEnrichApi(
+        selectedTicket.description || selectedTicket.summary,
+        selectedTicket.category,
+        selectedTicket.priority,
+        selectedTicket.summary
+      );
+      setEnrichmentData(result);
+    } catch (err) {
+      setEnrichmentError(err.message);
+    } finally {
+      setEnriching(false);
+    }
   };
 
   const handleGenerateDiagram = async () => {
@@ -259,6 +286,108 @@ export function TicketsPage() {
                       diagramDescription={diagramData.diagram_description}
                     />
                   </div>
+                </div>
+              )}
+            </div>
+
+            {/* Saleor Enrichment */}
+            <div className="modal-section">
+              <h4 className="modal-section-title">Saleor Enrichment</h4>
+
+              <button
+                className="diagram-generate-btn"
+                onClick={handleSaleorEnrich}
+                disabled={enriching}
+              >
+                {enriching ? (
+                  <span className="button-loading">
+                    <span className="spinner" /> Enriching with Saleor...
+                  </span>
+                ) : (
+                  'Enrich with Saleor'
+                )}
+              </button>
+
+              {enrichmentError && (
+                <div className="alert alert-error" style={{ marginTop: '12px' }}>
+                  <strong>Error:</strong> {enrichmentError}
+                </div>
+              )}
+
+              {enrichmentData && (
+                <div className="enrichment-result">
+                  {/* E-commerce badge */}
+                  <div className="enrichment-badge-row">
+                    <span className={`enrichment-badge ${enrichmentData.ecommerceRelated ? 'enrichment-badge--yes' : 'enrichment-badge--no'}`}>
+                      {enrichmentData.ecommerceRelated ? 'E-commerce related' : 'Not e-commerce related'}
+                    </span>
+                  </div>
+
+                  {/* Extracted entities */}
+                  {enrichmentData.extractedEntities && Object.values(enrichmentData.extractedEntities).some(Boolean) && (
+                    <div className="enrichment-card">
+                      <p className="enrichment-card-title">Extracted Entities</p>
+                      <div className="enrichment-entities">
+                        {Object.entries(enrichmentData.extractedEntities).map(([key, val]) =>
+                          val ? (
+                            <div key={key} className="detail-row">
+                              <span className="detail-label">{key}</span>
+                              <span className="detail-value">{val}</span>
+                            </div>
+                          ) : null
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Analysis */}
+                  {enrichmentData.analysis && (
+                    <div className="enrichment-card">
+                      <p className="enrichment-card-title">Analysis</p>
+                      <div className="enrichment-analysis">
+                        <div className="enrichment-analysis-item">
+                          <span className="detail-label">Possible Cause</span>
+                          <p className="enrichment-analysis-text">{enrichmentData.analysis.possibleCause}</p>
+                        </div>
+                        <div className="enrichment-analysis-item">
+                          <span className="detail-label">Impact</span>
+                          <p className="enrichment-analysis-text">{enrichmentData.analysis.impact}</p>
+                        </div>
+                        <div className="enrichment-analysis-item">
+                          <span className="detail-label">Recommended Action</span>
+                          <p className="enrichment-analysis-text" style={{ whiteSpace: 'pre-line' }}>{enrichmentData.analysis.recommendedAction}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Saleor live data */}
+                  {enrichmentData.saleorData?.order && (
+                    <div className="enrichment-card">
+                      <p className="enrichment-card-title">Order from Saleor</p>
+                      <div className="detail-row">
+                        <span className="detail-label">Order #</span>
+                        <span className="detail-value">{enrichmentData.saleorData.order.number}</span>
+                      </div>
+                      <div className="detail-row">
+                        <span className="detail-label">Status</span>
+                        <span className="detail-value">{enrichmentData.saleorData.order.status}</span>
+                      </div>
+                      <div className="detail-row">
+                        <span className="detail-label">Payment</span>
+                        <span className="detail-value">{enrichmentData.saleorData.order.paymentStatus}</span>
+                      </div>
+                      {enrichmentData.saleorData.order.total?.gross && (
+                        <div className="detail-row">
+                          <span className="detail-label">Total</span>
+                          <span className="detail-value">
+                            {enrichmentData.saleorData.order.total.gross.amount}{' '}
+                            {enrichmentData.saleorData.order.total.gross.currency}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

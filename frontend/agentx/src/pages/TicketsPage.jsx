@@ -14,7 +14,7 @@ export function TicketsPage() {
 
       try {
         const data = await getTickets();
-        setTickets(Array.isArray(data.tickets) ? data.tickets : [data.tickets]);
+        setTickets(Array.isArray(data) ? data : []);
       } catch (err) {
         setError(err.message);
       } finally {
@@ -31,7 +31,7 @@ export function TicketsPage() {
 
     try {
       const data = await getTickets();
-      setTickets(Array.isArray(data.tickets) ? data.tickets : [data.tickets]);
+      setTickets(Array.isArray(data) ? data : []);
     } catch (err) {
       setError(err.message);
     } finally {

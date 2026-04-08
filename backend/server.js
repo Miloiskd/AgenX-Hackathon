@@ -1,11 +1,20 @@
 import 'dotenv/config';
 import express from 'express';
 import multer from 'multer';
+import helmet from 'helmet';
 import { triageAndCreateTicket } from './modules/triage/triage.service.js';
 import { getAllTickets, getTicketStats } from './modules/tickets/tickets.service.js';
 import { initDb, getDbConnection } from './db/database.js';
 import { assignTeam } from './modules/assignment/index.js';
 import { notifyReporterResolved } from './modules/gmail/index.js';
+import {
+  sanitizeInput,
+  validateIngestRequest,
+  validateEmail,
+  ingestLimiter,
+  generalLimiter,
+  moderateLimiter,
+} from './modules/security/index.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -14,13 +23,30 @@ const PORT = process.env.PORT || 3000;
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB limit
+    fileSize: 5 * 1024 * 1024, // 5MB limit per file (stricter than before)
+  },
+  fileFilter: (req, file, cb) => {
+    // Allowed MIME types
+    const allowed = ['image/png', 'image/jpeg', 'text/plain'];
+    if (allowed.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error(`File type ${file.mimetype} not allowed`));
+    }
   },
 });
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// ─── Security Middleware ─────────────────────────────────────────────────
+// Helmet: Set secure HTTP headers
+app.use(helmet());
+
+// Rate limiting: General limiter (100 requests per 15 minutes per IP)
+app.use(generalLimiter);
+
+// CORS configuration
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
@@ -42,26 +68,39 @@ app.get('/health', (req, res) => {
 /**
  * POST /ingest
  * Submit user input for triage and ticket creation
+ * Rate limited: 30 requests per 15 minutes per reporter email or IP
  */
 app.post(
   '/ingest',
+  ingestLimiter, // Apply strict rate limiting
   upload.fields([
     { name: 'photo', maxCount: 1 },
     { name: 'logs', maxCount: 1 },
   ]),
   async (req, res) => {
     try {
-      const { text, reporterEmail } = req.body;
-
-      if (!text || typeof text !== 'string' || text.trim().length === 0) {
+      // ─── Validation ──────────────────────────────────────────────
+      const validation = validateIngestRequest(req);
+      if (!validation.valid) {
         return res.status(400).json({
-          error: 'Bad request',
-          message: 'text field is required and must be a non-empty string',
+          error: 'Validation failed',
+          messages: validation.errors,
         });
       }
 
+      // ─── Sanitization ────────────────────────────────────────────
+      const sanitizedText = sanitizeInput(req.body.text);
+
+      if (sanitizedText.length === 0) {
+        return res.status(400).json({
+          error: 'Bad request',
+          message: 'Text appears to be malicious or empty after sanitization',
+        });
+      }
+
+      // ─── Build ticket data ───────────────────────────────────────
       const ticketData = {
-        text: text.trim(),
+        text: sanitizedText,
         hasPhoto: !!req.files?.photo?.[0],
         hasLogs: !!req.files?.logs?.[0],
         photoMime: req.files?.photo?.[0]?.mimetype,
@@ -70,25 +109,32 @@ app.post(
         logsSize: req.files?.logs?.[0]?.size,
       };
 
-      const ticket = await triageAndCreateTicket(text, ticketData);
+      // ─── Create ticket ───────────────────────────────────────────
+      const ticket = await triageAndCreateTicket(sanitizedText, ticketData);
 
+      // ─── Success response ────────────────────────────────────────
       res.status(201).json({
         success: true,
         message: 'Ticket created successfully',
-        emailSent: !!reporterEmail,
+        emailSent: !!req.body?.reporterEmail,
         ticket,
       });
     } catch (error) {
-      console.error('Error in /ingest:', error.message);
-      res.status(500).json({ error: 'Internal server error', message: error.message });
+      console.error('Error in /ingest:', error); // Log full error internally
+      // Return generic error to client (don't expose internals)
+      res.status(500).json({
+        error: 'Failed to create ticket',
+        message: 'An error occurred while processing your request. Please try again later.',
+      });
     }
   }
 );
 
 /**
  * GET /tickets
+ * Rate limited: 60 requests per 15 minutes per IP
  */
-app.get('/tickets', async (req, res) => {
+app.get('/tickets', moderateLimiter, async (req, res) => {
   try {
     const tickets = await getAllTickets();
 
@@ -116,35 +162,44 @@ app.get('/tickets', async (req, res) => {
       tickets: enrichedTickets,
     });
   } catch (error) {
-    console.error('Error in /tickets:', error.message);
-    res.status(500).json({ error: 'Internal server error', message: error.message });
+    console.error('Error in /tickets:', error); // Log full error internally
+    res.status(500).json({
+      error: 'Failed to fetch tickets',
+      message: 'An error occurred while retrieving tickets. Please try again later.',
+    });
   }
 });
 
 /**
  * GET /tickets/stats
+ * Rate limited: 60 requests per 15 minutes per IP
  */
-app.get('/tickets/stats', async (req, res) => {
+app.get('/tickets/stats', moderateLimiter, async (req, res) => {
   try {
     const stats = await getTicketStats();
     res.json({ success: true, stats });
   } catch (error) {
-    console.error('Error in /tickets/stats:', error.message);
-    res.status(500).json({ error: 'Internal server error', message: error.message });
+    console.error('Error in /tickets/stats:', error); // Log full error internally
+    res.status(500).json({
+      error: 'Failed to fetch statistics',
+      message: 'An error occurred while retrieving statistics. Please try again later.',
+    });
   }
 });
 
 /**
  * POST /assign
+ * Assign team to a ticket
+ * Rate limited: 60 requests per 15 minutes per IP
  */
-app.post('/assign', async (req, res) => {
+app.post('/assign', moderateLimiter, async (req, res) => {
   try {
     const { category, priority, summary, ticketId } = req.body;
 
     if (!category || !priority || !summary) {
       return res.status(400).json({
-        error: 'Bad request',
-        message: 'Fields category, priority, and summary are required',
+        error: 'Validation failed',
+        messages: ['Fields category, priority, and summary are required'],
       });
     }
 
@@ -165,33 +220,30 @@ app.post('/assign', async (req, res) => {
       ...result,
     });
   } catch (error) {
-    console.error('Error in /assign:', error.message);
+    console.error('Error in /assign:', error); // Log full error internally
     res.status(500).json({
-      error: 'Internal server error',
-      message: error.message,
+      error: 'Failed to assign team',
+      message: 'An error occurred while assigning the team. Please try again later.',
     });
   }
 });
 
 /**
  * POST /tickets/:id/resolve
+ * Mark ticket as resolved and notify reporter
+ * Rate limited: 60 requests per 15 minutes per IP
  */
-app.post('/tickets/:id/resolve', async (req, res) => {
+app.post('/tickets/:id/resolve', moderateLimiter, async (req, res) => {
   try {
     const { id } = req.params;
     const { reporterEmail, resolution } = req.body;
 
-    if (!reporterEmail) {
+    // Validate email
+    const emailValidation = validateEmail(reporterEmail);
+    if (!emailValidation.valid) {
       return res.status(400).json({
-        error: 'Bad request',
-        message: 'reporterEmail is required',
-      });
-    }
-
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(reporterEmail)) {
-      return res.status(400).json({
-        error: 'Bad request',
-        message: 'reporterEmail must be a valid email address',
+        error: 'Validation failed',
+        messages: [emailValidation.error],
       });
     }
 
@@ -201,7 +253,7 @@ app.post('/tickets/:id/resolve', async (req, res) => {
     if (!ticket) {
       return res.status(404).json({
         error: 'Not found',
-        message: `Ticket ${id} not found`,
+        message: 'Ticket not found',
       });
     }
 
@@ -217,12 +269,15 @@ app.post('/tickets/:id/resolve', async (req, res) => {
 
     res.json({
       success: true,
-      message: `Resolution notification sent to ${reporterEmail}`,
+      message: 'Resolution notification sent',
       ticketId: id,
     });
   } catch (error) {
-    console.error('Error in /tickets/:id/resolve:', error.message);
-    res.status(500).json({ error: 'Internal server error', message: error.message });
+    console.error('Error in /tickets/:id/resolve:', error); // Log full error internally
+    res.status(500).json({
+      error: 'Failed to resolve ticket',
+      message: 'An error occurred while resolving the ticket. Please try again later.',
+    });
   }
 });
 
@@ -230,14 +285,35 @@ app.post('/tickets/:id/resolve', async (req, res) => {
 app.use((req, res) => {
   res.status(404).json({
     error: 'Not found',
-    message: `Route ${req.method} ${req.path} not found`,
+    message: 'The requested resource was not found',
   });
 });
 
 // Global error handler
 app.use((err, req, res, next) => {
-  console.error('Error:', err);
-  res.status(500).json({ error: 'Internal server error', message: err.message });
+  console.error('Unhandled error:', err); // Log full error internally
+
+  // Handle multer file upload errors
+  if (err instanceof multer.MulterError) {
+    return res.status(400).json({
+      error: 'File upload failed',
+      message: 'The uploaded file is invalid or too large',
+    });
+  }
+
+  // Handle rate limit errors (shouldn't reach here due to middleware)
+  if (err.status === 429) {
+    return res.status(429).json({
+      error: 'Too many requests',
+      message: 'Please try again later',
+    });
+  }
+
+  // Generic error response (don't expose internals)
+  res.status(500).json({
+    error: 'Internal server error',
+    message: 'An unexpected error occurred. Please try again later.',
+  });
 });
 
 // Init DB and start server

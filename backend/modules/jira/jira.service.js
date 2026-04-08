@@ -150,11 +150,10 @@ export async function updateJiraTicketStatus(issueKey, newStatus) {
  */
 export async function searchJiraTickets(jql) {
   try {
-    const response = await jiraClient.get('/search', {
-      params: {
-        jql: jql || `project = ${JIRA_PROJECT_KEY}`,
-        maxResults: 100,
-      },
+    const response = await jiraClient.post('/search/jql', {
+      jql: jql || `project = ${JIRA_PROJECT_KEY}`,
+      maxResults: 100,
+      fields: ['key', 'summary', 'description', 'status', 'priority', 'created', 'updated', 'labels'],
     });
     return response.data.issues;
   } catch (error) {

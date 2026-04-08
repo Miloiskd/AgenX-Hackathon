@@ -1,11 +1,20 @@
 import 'dotenv/config';
 import express from 'express';
+import multer from 'multer';
 import { triageAndCreateTicket } from './modules/triage/triage.service.js';
 import { getAllTickets, getTicketStats } from './modules/tickets/tickets.service.js';
 import { notifyReporterResolved } from './modules/gmail/index.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Configure multer for file uploads (memory storage)
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+  },
+});
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -24,9 +33,12 @@ app.get('/health', (req, res) => {
 
 /**
  * POST /ingest
- * Body: { text: string, reporterEmail?: string }
+ * Submit user input for triage and ticket creation
  */
-app.post('/ingest', async (req, res) => {
+app.post('/ingest', upload.fields([
+  { name: 'photo', maxCount: 1 },
+  { name: 'logs', maxCount: 1 }
+]), async (req, res) => {
   try {
     const { text, reporterEmail } = req.body;
 
@@ -34,11 +46,19 @@ app.post('/ingest', async (req, res) => {
       return res.status(400).json({ error: 'Bad request', message: 'text field is required and must be a non-empty string' });
     }
 
-    if (reporterEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(reporterEmail)) {
-      return res.status(400).json({ error: 'Bad request', message: 'reporterEmail must be a valid email address' });
-    }
+    // Prepare ticket data with files info
+    const ticketData = {
+      text: text.trim(),
+      hasPhoto: !!req.files?.photo?.[0],
+      hasLogs: !!req.files?.logs?.[0],
+      photoMime: req.files?.photo?.[0]?.mimetype,
+      logsMime: req.files?.logs?.[0]?.mimetype,
+      photoSize: req.files?.photo?.[0]?.size,
+      logsSize: req.files?.logs?.[0]?.size,
+    };
 
-    const ticket = await triageAndCreateTicket(text, reporterEmail || null);
+    // Triage and create ticket
+    const ticket = await triageAndCreateTicket(text, ticketData);
 
     res.status(201).json({ success: true, message: 'Ticket created successfully', emailSent: !!reporterEmail, ticket });
   } catch (error) {

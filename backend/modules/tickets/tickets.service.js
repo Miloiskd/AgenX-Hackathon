@@ -1,6 +1,42 @@
 import { createJiraTicket, getAllJiraTickets } from '../jira/jira.service.js';
 
 /**
+ * Extract text from Atlassian Document Format description
+ * @param {Object} description - Jira description object
+ * @returns {string} - Extracted text
+ */
+function extractDescription(description) {
+  if (!description) return 'No description';
+  
+  // If it's Atlassian Document Format
+  if (description.type === 'doc' && description.content) {
+    try {
+      const text = description.content
+        .filter(block => block.type === 'paragraph')
+        .map(block => {
+          if (block.content && Array.isArray(block.content)) {
+            return block.content
+              .map(item => item.text || '')
+              .join('');
+          }
+          return '';
+        })
+        .join('\n');
+      return text || 'No description';
+    } catch (e) {
+      return 'No description';
+    }
+  }
+  
+  // If it's plain string
+  if (typeof description === 'string') {
+    return description;
+  }
+  
+  return 'No description';
+}
+
+/**
  * Create a new ticket in Jira
  * @param {Object} ticketData - Ticket data from triage
  * @param {string} ticketData.input - Original user input
@@ -35,12 +71,14 @@ export async function getAllTickets() {
   try {
     const jiraTickets = await getAllJiraTickets();
     
+    console.log(`📋 Fetching ${jiraTickets?.length || 0} tickets from Jira`);
+    
     // Transform Jira issues to our format
     return jiraTickets.map(issue => ({
       id: issue.key,
       jiraId: issue.id,
-      summary: issue.fields.summary,
-      description: issue.fields.description?.content?.[0]?.content?.[0]?.text || 'No description',
+      summary: issue.fields.summary || 'No title',
+      description: extractDescription(issue.fields.description),
       category: issue.fields.labels?.[0] || 'other',
       priority: issue.fields.priority?.name || 'Medium',
       status: issue.fields.status?.name || 'unknown',

@@ -13,7 +13,7 @@ export function TicketsPage() {
 
       try {
         const data = await getTickets();
-        setTickets(Array.isArray(data) ? data : [data]);
+        setTickets(data || []);
       } catch (err) {
         setError(err.message);
       } finally {
@@ -30,7 +30,7 @@ export function TicketsPage() {
 
     try {
       const data = await getTickets();
-      setTickets(Array.isArray(data) ? data : [data]);
+      setTickets(data || []);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -64,17 +64,20 @@ export function TicketsPage() {
           {tickets.map((ticket) => (
             <div key={ticket.id} className="ticket-card">
               <div className="ticket-header">
-                <h3>Ticket #{ticket.id}</h3>
+                <h3>{ticket.summary || `Ticket ${ticket.id}`}</h3>
                 <span className={`status-badge status-${ticket.status?.toLowerCase() || 'unknown'}`}>
                   {ticket.status || 'Unknown'}
                 </span>
               </div>
               <div className="ticket-body">
+                <p><strong>ID:</strong> {ticket.id}</p>
                 <p><strong>Category:</strong> {ticket.category || 'N/A'}</p>
                 <p><strong>Priority:</strong> {ticket.priority || 'N/A'}</p>
-                <p><strong>Status:</strong> {ticket.status || 'N/A'}</p>
                 {ticket.description && (
                   <p><strong>Description:</strong> {ticket.description}</p>
+                )}
+                {ticket.url && (
+                  <p><a href={ticket.url} target="_blank" rel="noopener noreferrer">View in Jira →</a></p>
                 )}
               </div>
             </div>

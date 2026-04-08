@@ -3,29 +3,47 @@ import { createTicket } from '../tickets/tickets.service.js';
 import { notifyReporterTicketCreated, notifyTeamNewTicket } from '../gmail/index.js';
 
 /**
- * Process user input through triage, create a ticket, and send email notifications.
- * @param {string} userInput     - The user's support request text
- * @param {string} reporterEmail - Email of the user who submitted the report
- * @returns {Promise<Object>}    - Created ticket object
+ * Process user input through triage and create a ticket
+ * Sends email notifications to reporter and team
+ * @param {string} userInput - The user's support request text
+ * @param {string|Object} emailOrAdditionalData - Reporter email OR object with file metadata
+ * @returns {Promise<Object>} - Created ticket object
  */
-export async function triageAndCreateTicket(userInput, reporterEmail) {
+export async function triageAndCreateTicket(userInput, emailOrAdditionalData = {}) {
   try {
     // Step 1: Run the AI triage chain to classify the input
     console.log('🔍 Triaging input...');
     const triageResult = await runTriageChain(userInput);
     console.log('✅ Triage complete:', triageResult);
 
-    // Step 2: Create a ticket with the triage results
+    // Step 2: Build ticket description with file info
+    let description = userInput;
+    const isEmail = typeof emailOrAdditionalData === 'string';
+    const reporterEmail = isEmail ? emailOrAdditionalData : emailOrAdditionalData?.reporterEmail;
+    const additionalData = !isEmail ? emailOrAdditionalData : {};
+
+    if (additionalData.hasPhoto || additionalData.hasLogs) {
+      description += '\n\n---\n**Attachments:**\n';
+      if (additionalData.hasPhoto) {
+        description += `- 📸 Photo (${additionalData.photoMime}, ${(additionalData.photoSize / 1024).toFixed(2)} KB)\n`;
+      }
+      if (additionalData.hasLogs) {
+        description += `- 📄 Log file (${additionalData.logsMime}, ${(additionalData.logsSize / 1024).toFixed(2)} KB)\n`;
+      }
+    }
+
+    // Step 3: Create a ticket with the triage results
     console.log('📝 Creating ticket...');
     const ticket = await createTicket({
       input: userInput,
+      description: description,
       category: triageResult.category,
       priority: triageResult.priority,
       summary: triageResult.summary,
     });
     console.log('✅ Ticket created:', ticket.jiraKey);
 
-    // Step 3: Send email notifications (non-blocking — failures don't break the flow)
+    // Step 4: Send email notifications (non-blocking — failures don't break the flow)
     if (reporterEmail) {
       notifyReporterTicketCreated({ ticket, reporterEmail })
         .then(() => console.log(`📧 Confirmation email sent to reporter: ${reporterEmail}`))

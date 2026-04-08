@@ -40,3 +40,24 @@ export const getTickets = async () => {
     throw new Error(`Failed to fetch tickets: ${error.message}`);
   }
 };
+
+// Assign team to a ticket
+export const assignTeamApi = async (ticketId, category, priority, summary) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/assign`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ ticketId, category, priority, summary }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Error: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    throw new Error(`Failed to assign team: ${error.message}`);
+  }
+};

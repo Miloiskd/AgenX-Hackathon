@@ -2,6 +2,8 @@ import 'dotenv/config';
 import express from 'express';
 import { triageAndCreateTicket } from './modules/triage/triage.service.js';
 import { getAllTickets, getTicketStats } from './modules/tickets/tickets.service.js';
+import { initDb, getDbConnection } from './db/database.js';
+import { assignTeam } from './modules/assignment/index.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -19,6 +21,11 @@ app.use((req, res, next) => {
     return res.sendStatus(200);
   }
   next();
+});
+
+// Root route
+app.get('/', (req, res) => {
+  res.json({ message: 'Welcome to AgenX Ticketing System API. Check /health for status.' });
 });
 
 // Health check
@@ -65,10 +72,28 @@ app.post('/ingest', async (req, res) => {
 app.get('/tickets', async (req, res) => {
   try {
     const tickets = await getAllTickets();
+
+    // Enrich with assigned teams from SQLite
+    const db = await getDbConnection();
+    const assignments = await db.all('SELECT incident_id, assigned_team FROM incident_assignments');
+    const assignmentMap = assignments.reduce((acc, row) => {
+      try {
+        acc[row.incident_id] = JSON.parse(row.assigned_team);
+      } catch (e) {
+        acc[row.incident_id] = row.assigned_team;
+      }
+      return acc;
+    }, {});
+
+    const enrichedTickets = tickets.map(ticket => ({
+      ...ticket,
+      assignedTeam: assignmentMap[ticket.id] || null,
+    }));
+
     res.json({
       success: true,
-      count: tickets.length,
-      tickets,
+      count: enrichedTickets.length,
+      tickets: enrichedTickets,
     });
   } catch (error) {
     console.error('Error in /tickets:', error.message);
@@ -99,6 +124,47 @@ app.get('/tickets/stats', async (req, res) => {
   }
 });
 
+/**
+ * POST /assign
+ * Assign a team to an incident using triage data + AI
+ * Body: { category, priority, summary, ticketId }
+ */
+app.post('/assign', async (req, res) => {
+  try {
+    const { category, priority, summary, ticketId } = req.body;
+
+    if (!category || !priority || !summary) {
+      return res.status(400).json({
+        error: 'Bad request',
+        message: 'Fields category, priority, and summary are required',
+      });
+    }
+
+    const result = await assignTeam({ category, priority, summary });
+
+    if (ticketId) {
+      const db = await getDbConnection();
+      await db.run(
+        `INSERT INTO incident_assignments (incident_id, assigned_team) 
+         VALUES (?, ?) 
+         ON CONFLICT(incident_id) DO UPDATE SET assigned_team = excluded.assigned_team`,
+        [ticketId, JSON.stringify(result.team)]
+      );
+    }
+
+    res.json({
+      success: true,
+      ...result,
+    });
+  } catch (error) {
+    console.error('Error in /assign:', error.message);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: error.message,
+    });
+  }
+});
+
 // 404 handler
 app.use((req, res) => {
   res.status(404).json({
@@ -116,12 +182,18 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`🚀 Server running at http://localhost:${PORT}`);
-  console.log(`📝 POST /ingest - Submit a ticket for triage`);
-  console.log(`📋 GET /tickets - Get all tickets`);
-  console.log(`📊 GET /tickets/stats - Get ticket statistics`);
-  console.log(`🔄 PUT /tickets/:id/status - Update ticket status`);
-  console.log(`✅ GET /health - Health check`);
+// Inicializar DB y luego iniciar el servidor
+initDb().then(() => {
+  // Start server
+  app.listen(PORT, () => {
+    console.log(`🚀 Server running at http://localhost:${PORT}`);
+    console.log(`📝 POST /ingest - Submit a ticket for triage`);
+    console.log(`📋 GET /tickets - Get all tickets`);
+    console.log(`📊 GET /tickets/stats - Get ticket statistics`);
+    console.log(`🔄 PUT /tickets/:id/status - Update ticket status`);
+    console.log(`✅ GET /health - Health check`);
+  });
+}).catch(err => {
+  console.error('Failed to initialize database:', err);
+  process.exit(1);
 });

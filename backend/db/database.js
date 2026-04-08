@@ -68,7 +68,12 @@ export async function initDb() {
       INSERT INTO users (name, email, role, experience_years) VALUES 
         ('Ana García', 'ana.garcia@agenx.dev', 'Backend Engineer', 5),
         ('Carlos Ruiz', 'carlos.ruiz@agenx.dev', 'Frontend Engineer', 3),
-        ('Elena Torres', 'elena.torres@agenx.dev', 'DevOps Engineer', 6);
+        ('Elena Torres', 'elena.torres@agenx.dev', 'DevOps Engineer', 6),
+        ('Javier Mendoza', 'javier.mendoza@agenx.dev', 'Backend Engineer', 2),
+        ('Lucía Castro', 'lucia.castro@agenx.dev', 'Fullstack Engineer', 4),
+        ('Miguel Ortiz', 'miguel.ortiz@agenx.dev', 'Site Reliability Engineer', 5),
+        ('Carmen Solís', 'carmen.solis@agenx.dev', 'Frontend Engineer', 2),
+        ('Roberto Pineda', 'roberto.pineda@agenx.dev', 'Backend Engineer', 8);
 
       INSERT INTO skills (name) VALUES 
         ('Node.js'),
@@ -76,12 +81,14 @@ export async function initDb() {
         ('AWS / Infraestructura');
 
       INSERT INTO user_skills (user_id, skill_id, level) VALUES 
-        (1, 1, 5), 
-        (1, 3, 2),
-        (2, 2, 5), 
-        (2, 1, 2),
-        (3, 3, 5), 
-        (3, 1, 3);
+        (1, 1, 5), (1, 3, 2),
+        (2, 2, 5), (2, 1, 2),
+        (3, 3, 5), (3, 1, 3),
+        (4, 1, 3),
+        (5, 1, 4), (5, 2, 4),
+        (6, 3, 5), (6, 1, 2),
+        (7, 2, 3),
+        (8, 1, 5), (8, 3, 4);
     `);
         console.log('✅ Base de datos inicializada y poblada.');
     } else {

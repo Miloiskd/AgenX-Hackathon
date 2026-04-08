@@ -20,7 +20,7 @@ export function DashboardPage() {
 
       try {
         const data = await getTickets();
-        const ticketList = Array.isArray(data) ? data : [data];
+        const ticketList = Array.isArray(data) ? data : [];
 
         const newMetrics = {
           total: ticketList.length,

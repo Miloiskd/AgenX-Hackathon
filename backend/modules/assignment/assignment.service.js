@@ -3,9 +3,11 @@ import { runAssignmentAgent } from './assignment.agent.js';
 
 // Team size by priority
 const TEAM_SIZE = {
-  low:    1,
+  lowest: 1,
+  low: 1,
   medium: 2,
-  high:   3,
+  high: 3,
+  highest: 3,
 };
 
 /**
@@ -26,7 +28,14 @@ export async function assignTeam(incident) {
     throw new Error('incident must include category, priority, and summary');
   }
 
-  const teamSize = TEAM_SIZE[priority] ?? 1;
+  const normalizedPriority = priority.toLowerCase();
+
+  let teamSize = 1;
+  if (normalizedPriority.includes('high') || normalizedPriority.includes('critical')) {
+    teamSize = 3;
+  } else if (normalizedPriority.includes('medium') || normalizedPriority.includes('major')) {
+    teamSize = 2;
+  }
 
   console.log(`🔍 Fetching candidates for category="${category}"...`);
   const candidates = await getCandidates(category);
@@ -38,8 +47,8 @@ export async function assignTeam(incident) {
   console.log(`✅ Team assigned:`, result.team);
 
   return {
-    team:                result.team,
-    reason:              result.reason,
+    team: result.team,
+    reason: result.reason,
     teamSize,
     candidatesEvaluated: candidates.length,
   };

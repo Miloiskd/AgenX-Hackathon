@@ -14,8 +14,7 @@ export function AssignmentPage() {
       setLoadingTickets(true);
       try {
         const data = await getTickets();
-        const list = Array.isArray(data.tickets) ? data.tickets : [data.tickets];
-        setTickets(list);
+        setTickets(Array.isArray(data) ? data : []);
       } catch (err) {
         setError(err.message);
       } finally {
@@ -42,7 +41,7 @@ export function AssignmentPage() {
       setResult(data);
       // Refresh ticket list so assignedTeam is updated
       const updated = await getTickets();
-      setTickets(Array.isArray(updated.tickets) ? updated.tickets : [updated.tickets]);
+      setTickets(Array.isArray(updated) ? updated : []);
     } catch (err) {
       setError(err.message);
     } finally {

@@ -1,14 +1,16 @@
 import { runTriageChain } from './triage.chain.js';
 import { createTicket } from '../tickets/tickets.service.js';
+import { notifyReporterTicketCreated, notifyTeamNewTicket } from '../gmail/index.js';
 
 /**
- * Process user input through triage and create a ticket
- * @param {string} userInput - The user's support request text
- * @returns {Promise<Object>} - Created ticket object
+ * Process user input through triage, create a ticket, and send email notifications.
+ * @param {string} userInput     - The user's support request text
+ * @param {string} reporterEmail - Email of the user who submitted the report
+ * @returns {Promise<Object>}    - Created ticket object
  */
-export async function triageAndCreateTicket(userInput) {
+export async function triageAndCreateTicket(userInput, reporterEmail) {
   try {
-    // Step 1: Run the triage chain to classify the input
+    // Step 1: Run the AI triage chain to classify the input
     console.log('🔍 Triaging input...');
     const triageResult = await runTriageChain(userInput);
     console.log('✅ Triage complete:', triageResult);
@@ -21,7 +23,18 @@ export async function triageAndCreateTicket(userInput) {
       priority: triageResult.priority,
       summary: triageResult.summary,
     });
-    console.log('✅ Ticket created:', ticket);
+    console.log('✅ Ticket created:', ticket.jiraKey);
+
+    // Step 3: Send email notifications (non-blocking — failures don't break the flow)
+    if (reporterEmail) {
+      notifyReporterTicketCreated({ ticket, reporterEmail })
+        .then(() => console.log(`📧 Confirmation email sent to reporter: ${reporterEmail}`))
+        .catch((err) => console.error('⚠️  Failed to send reporter confirmation:', err.message));
+    }
+
+    notifyTeamNewTicket({ ticket, reporterEmail: reporterEmail || 'anonymous' })
+      .then(() => console.log('📧 Alert email sent to SRE team'))
+      .catch((err) => console.error('⚠️  Failed to send team alert:', err.message));
 
     return ticket;
   } catch (error) {

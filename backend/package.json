@@ -1,19 +1,14 @@
 {
   "name": "agentx-backend",
   "version": "1.0.0",
-  "description": "AI-powered ticketing system backend with LangChain",
+  "description": "AI-powered SRE incident intake & triage agent",
   "type": "module",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js"
   },
-  "keywords": [
-    "langchain",
-    "openai",
-    "ticketing",
-    "triage"
-  ],
+  "keywords": ["langchain", "openai", "ticketing", "triage", "sre", "gmail"],
   "author": "AgenX",
   "license": "MIT",
   "dependencies": {
@@ -22,6 +17,7 @@
     "axios": "^1.6.5",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
+    "nodemailer": "^6.9.9",
     "uuid": "^9.0.1"
   },
   "devDependencies": {

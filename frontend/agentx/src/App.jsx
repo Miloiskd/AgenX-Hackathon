@@ -2,6 +2,7 @@ import { useState } from 'react'
 import './App.css'
 import { useAuth } from './context/AuthContext'
 import { Navigation } from './components/Navigation'
+import { LandingPage } from './pages/LandingPage'
 import { LoginPage } from './pages/LoginPage'
 import { RegisterPage } from './pages/RegisterPage'
 import { UploadPage } from './pages/UploadPage'
@@ -13,54 +14,63 @@ import { TicketResolutionPage } from './pages/TicketResolutionPage'
 
 function App() {
   const { isAuthenticated, user } = useAuth()
-  const [authView, setAuthView] = useState('login')   // 'login' | 'register'
+  const [authView, setAuthView] = useState('landing') // 'landing' | 'login' | 'register'
   const [currentPage, setCurrentPage] = useState('upload')
   const [viewingTicketId, setViewingTicketId] = useState(null)
 
-  // ── Not logged in → show auth screens ────────────────────────────────────
   if (!isAuthenticated) {
-    return authView === 'login'
-      ? <LoginPage    onGoRegister={() => setAuthView('register')} />
-      : <RegisterPage onGoLogin={()    => setAuthView('login')}    />
+    if (authView === 'landing') {
+      return (
+        <LandingPage
+          onGoLogin={() => setAuthView('login')}
+          onGoRegister={() => setAuthView('register')}
+        />
+      )
+    }
+    if (authView === 'login') {
+      return (
+        <LoginPage
+          onGoRegister={() => setAuthView('register')}
+          onGoLanding={() => setAuthView('landing')}
+        />
+      )
+    }
+    return (
+      <RegisterPage
+        onGoLogin={() => setAuthView('login')}
+        onGoLanding={() => setAuthView('landing')}
+      />
+    )
   }
 
-  // ── Logged in → full app ──────────────────────────────────────────────────
   const renderPage = () => {
-    // If viewing a ticket, show resolution timeline
     if (viewingTicketId) {
       return (
-        <TicketResolutionPage 
-          ticketId={viewingTicketId} 
-          onClose={() => {
-            setViewingTicketId(null);
-            setCurrentPage('upload');
-          }}
+        <TicketResolutionPage
+          ticketId={viewingTicketId}
+          onClose={() => { setViewingTicketId(null); setCurrentPage('upload'); }}
         />
-      );
+      )
     }
-
-    // Guard: non-admins can't reach admin page
     if (currentPage === 'admin' && user?.role !== 'admin') {
-      return <UploadPage onTicketSubmitted={(ticketId) => setViewingTicketId(ticketId)} />
+      return <UploadPage onTicketSubmitted={(id) => setViewingTicketId(id)} />
     }
     switch (currentPage) {
-      case 'upload':     return <UploadPage onTicketSubmitted={(ticketId) => setViewingTicketId(ticketId)} />
-      case 'tickets':    return <TicketsPage onViewTicket={(ticketId) => setViewingTicketId(ticketId)} />
+      case 'upload':     return <UploadPage onTicketSubmitted={(id) => setViewingTicketId(id)} />
+      case 'tickets':    return <TicketsPage onViewTicket={(id) => setViewingTicketId(id)} />
       case 'dashboard':  return <DashboardPage />
       case 'assignment': return <AssignmentPage />
       case 'admin':      return <AdminPage />
-      default:           return <UploadPage onTicketSubmitted={(ticketId) => setViewingTicketId(ticketId)} />
+      default:           return <UploadPage onTicketSubmitted={(id) => setViewingTicketId(id)} />
     }
   }
 
   return (
     <div className="app">
       <Navigation currentPage={currentPage} setCurrentPage={setCurrentPage} />
-      <main className="main-content">
-        {renderPage()}
-      </main>
+      <main className="main-content">{renderPage()}</main>
       <footer className="app-footer">
-        <p>&copy; 2026 AgenX Ticketing System. All rights reserved.</p>
+        <p>&copy; 2026 AgentX_SYNCRO. All rights reserved.</p>
       </footer>
     </div>
   )

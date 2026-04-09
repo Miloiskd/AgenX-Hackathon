@@ -1,31 +1,31 @@
 import { useState } from 'react';
 import { submitTicket } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
 export function UploadPage() {
-  const [text, setText] = useState('');
+  const { user } = useAuth();
+  const [text, setText]   = useState('');
   const [photo, setPhoto] = useState(null);
-  const [logs, setLogs] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [logs, setLogs]   = useState(null);
+  const [loading, setLoading]   = useState(false);
   const [response, setResponse] = useState(null);
-  const [error, setError] = useState(null);
+  const [error, setError]       = useState(null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
     setResponse(null);
-
     try {
       const result = await submitTicket(text, photo, logs);
       setResponse(result);
       setText('');
       setPhoto(null);
       setLogs(null);
-      // Reset file inputs
       const photoInput = document.getElementById('photo-input');
-      const logsInput = document.getElementById('logs-input');
+      const logsInput  = document.getElementById('logs-input');
       if (photoInput) photoInput.value = '';
-      if (logsInput) logsInput.value = '';
+      if (logsInput)  logsInput.value  = '';
     } catch (err) {
       setError(err.message);
     } finally {
@@ -33,22 +33,15 @@ export function UploadPage() {
     }
   };
 
-  const handlePhotoChange = (e) => {
-    if (e.target.files && e.target.files[0]) {
-      setPhoto(e.target.files[0]);
-    }
-  };
-
-  const handleLogsChange = (e) => {
-    if (e.target.files && e.target.files[0]) {
-      setLogs(e.target.files[0]);
-    }
-  };
-
   return (
     <div className="page-container">
       <h2>Upload Ticket</h2>
-      
+
+      {/* Reporter info banner */}
+      <div className="reporter-banner">
+        <span>📬 Confirmation and resolution emails will be sent to <strong>{user?.email}</strong></span>
+      </div>
+
       <form onSubmit={handleSubmit} className="upload-form">
         <div className="form-group">
           <label htmlFor="ticket-text">Describe your issue:</label>
@@ -68,7 +61,7 @@ export function UploadPage() {
             id="photo-input"
             type="file"
             accept="image/*"
-            onChange={handlePhotoChange}
+            onChange={(e) => e.target.files?.[0] && setPhoto(e.target.files[0])}
             disabled={loading}
             className="file-input"
           />
@@ -81,7 +74,7 @@ export function UploadPage() {
             id="logs-input"
             type="file"
             accept=".txt,.log,.json,.csv,.pdf"
-            onChange={handleLogsChange}
+            onChange={(e) => e.target.files?.[0] && setLogs(e.target.files[0])}
             disabled={loading}
             className="file-input"
           />

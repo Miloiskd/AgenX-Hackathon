@@ -1,0 +1,2 @@
+export { requireAuth, requireAdmin, signToken, verifyToken } from './auth.middleware.js';
+export { register, login, getAllUsers, createUser, updateUser, deleteUser, initAccountsTable } from './auth.service.js';

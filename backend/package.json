@@ -8,24 +8,19 @@
     "start": "node server.js",
     "dev": "node --watch server.js"
   },
-  "keywords": [
-    "langchain",
-    "openai",
-    "ticketing",
-    "triage",
-    "sre",
-    "gmail"
-  ],
+  "keywords": ["langchain", "openai", "ticketing", "triage", "sre", "gmail"],
   "author": "AgenX",
   "license": "MIT",
   "dependencies": {
     "@langchain/core": "^0.1.44",
     "@langchain/openai": "^0.0.26",
     "axios": "^1.6.5",
+    "bcryptjs": "^2.4.3",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
     "express-rate-limit": "^8.3.2",
     "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.2",
     "multer": "^2.1.1",
     "nodemailer": "^6.9.9",
     "sqlite": "^5.1.1",

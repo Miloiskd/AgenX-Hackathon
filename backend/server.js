@@ -3,12 +3,22 @@ import express from 'express';
 import multer from 'multer';
 import helmet from 'helmet';
 import { triageAndCreateTicket } from './modules/triage/triage.service.js';
-import { enrichIncident, extractEntities } from './modules/saleor/index.js';
 import { getAllTickets, getTicketStats } from './modules/tickets/tickets.service.js';
 import { initDb, getDbConnection } from './db/database.js';
 import { assignTeam } from './modules/assignment/index.js';
 import { generateDiagram } from './modules/diagram/index.js';
 import { notifyReporterResolved } from './modules/gmail/index.js';
+import { enrichIncident } from './modules/saleor/saleor.enrichment.js';
+import {
+  requireAuth,
+  requireAdmin,
+  register,
+  login,
+  getAllUsers,
+  createUser,
+  updateUser,
+  deleteUser,
+} from './modules/auth/index.js';
 import {
   sanitizeInput,
   validateIngestRequest,
@@ -21,86 +31,103 @@ import {
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Configure multer for file uploads (memory storage)
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB limit per file (stricter than before)
-  },
+  limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    // Allowed MIME types
     const allowed = ['image/png', 'image/jpeg', 'text/plain'];
-    if (allowed.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new Error(`File type ${file.mimetype} not allowed`));
-    }
+    if (allowed.includes(file.mimetype)) cb(null, true);
+    else cb(new Error(`File type ${file.mimetype} not allowed`));
   },
 });
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-// ─── Security Middleware ─────────────────────────────────────────────────
-// Helmet: Set secure HTTP headers
 app.use(helmet());
-
-// Rate limiting: General limiter (100 requests per 15 minutes per IP)
 app.use(generalLimiter);
 
-// CORS configuration
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
   if (req.method === 'OPTIONS') return res.sendStatus(200);
   next();
 });
 
-// Root route
+// ─── Public routes ────────────────────────────────────────────────────────────
+
 app.get('/', (req, res) => {
-  res.json({ message: 'Welcome to AgenX Ticketing System API. Check /health for status.' });
+  res.json({ message: 'Welcome to AgenX Ticketing System API.' });
 });
 
-// Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', message: 'Server is running' });
 });
 
 /**
+ * POST /auth/register
+ * Body: { name, email, password }
+ */
+app.post('/auth/register', async (req, res) => {
+  try {
+    const { name, email, password } = req.body;
+
+    if (!name || !email || !password) {
+      return res.status(400).json({ error: 'Validation failed', message: 'name, email and password are required' });
+    }
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Validation failed', message: 'Password must be at least 6 characters' });
+    }
+
+    const result = await register({ name, email, password });
+    res.status(201).json({ success: true, ...result });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /auth/login
+ * Body: { email, password }
+ */
+app.post('/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Validation failed', message: 'email and password are required' });
+    }
+    const result = await login({ email, password });
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+// ─── Protected routes (require valid JWT) ─────────────────────────────────────
+
+/**
  * POST /ingest
- * Submit user input for triage and ticket creation
- * Rate limited: 30 requests per 15 minutes per reporter email or IP
  */
 app.post(
   '/ingest',
-  ingestLimiter, // Apply strict rate limiting
+  requireAuth,
+  ingestLimiter,
   upload.fields([
     { name: 'photo', maxCount: 1 },
     { name: 'logs', maxCount: 1 },
   ]),
   async (req, res) => {
     try {
-      // ─── Validation ──────────────────────────────────────────────
       const validation = validateIngestRequest(req);
       if (!validation.valid) {
-        return res.status(400).json({
-          error: 'Validation failed',
-          messages: validation.errors,
-        });
+        return res.status(400).json({ error: 'Validation failed', messages: validation.errors });
       }
 
-      // ─── Sanitization ────────────────────────────────────────────
       const sanitizedText = sanitizeInput(req.body.text);
-
       if (sanitizedText.length === 0) {
-        return res.status(400).json({
-          error: 'Bad request',
-          message: 'Text appears to be malicious or empty after sanitization',
-        });
+        return res.status(400).json({ error: 'Bad request', message: 'Text appears empty after sanitization' });
       }
 
-      // ─── Build ticket data ───────────────────────────────────────
       const ticketData = {
         text: sanitizedText,
         hasPhoto: !!req.files?.photo?.[0],
@@ -109,47 +136,38 @@ app.post(
         logsMime: req.files?.logs?.[0]?.mimetype,
         photoSize: req.files?.photo?.[0]?.size,
         logsSize: req.files?.logs?.[0]?.size,
+        // Use authenticated user's email as reporterEmail
+        reporterEmail: req.user.email,
+        reporterName: req.user.name,
       };
 
-      // ─── Create ticket ───────────────────────────────────────────
       const ticket = await triageAndCreateTicket(sanitizedText, ticketData);
 
-      // ─── Success response ────────────────────────────────────────
       res.status(201).json({
         success: true,
         message: 'Ticket created successfully',
-        emailSent: !!req.body?.reporterEmail,
+        emailSent: true,
         ticket,
       });
     } catch (error) {
-      console.error('Error in /ingest:', error); // Log full error internally
-      // Return generic error to client (don't expose internals)
-      res.status(500).json({
-        error: 'Failed to create ticket',
-        message: 'An error occurred while processing your request. Please try again later.',
-      });
+      console.error('Error in /ingest:', error);
+      res.status(500).json({ error: 'Failed to create ticket', message: 'Please try again later.' });
     }
   }
 );
 
 /**
  * GET /tickets
- * Rate limited: 60 requests per 15 minutes per IP
  */
-app.get('/tickets', moderateLimiter, async (req, res) => {
+app.get('/tickets', requireAuth, moderateLimiter, async (req, res) => {
   try {
     const tickets = await getAllTickets();
-
-    // Enrich with assigned teams from SQLite
     const db = await getDbConnection();
     const assignments = await db.all('SELECT incident_id, assigned_team FROM incident_assignments');
 
     const assignmentMap = assignments.reduce((acc, row) => {
-      try {
-        acc[row.incident_id] = JSON.parse(row.assigned_team);
-      } catch {
-        acc[row.incident_id] = row.assigned_team;
-      }
+      try { acc[row.incident_id] = JSON.parse(row.assigned_team); }
+      catch { acc[row.incident_id] = row.assigned_team; }
       return acc;
     }, {});
 
@@ -158,51 +176,34 @@ app.get('/tickets', moderateLimiter, async (req, res) => {
       assignedTeam: assignmentMap[ticket.id] || null,
     }));
 
-    res.json({
-      success: true,
-      count: enrichedTickets.length,
-      tickets: enrichedTickets,
-    });
+    res.json({ success: true, count: enrichedTickets.length, tickets: enrichedTickets });
   } catch (error) {
-    console.error('Error in /tickets:', error); // Log full error internally
-    res.status(500).json({
-      error: 'Failed to fetch tickets',
-      message: 'An error occurred while retrieving tickets. Please try again later.',
-    });
+    console.error('Error in /tickets:', error);
+    res.status(500).json({ error: 'Failed to fetch tickets', message: 'Please try again later.' });
   }
 });
 
 /**
  * GET /tickets/stats
- * Rate limited: 60 requests per 15 minutes per IP
  */
-app.get('/tickets/stats', moderateLimiter, async (req, res) => {
+app.get('/tickets/stats', requireAuth, moderateLimiter, async (req, res) => {
   try {
     const stats = await getTicketStats();
     res.json({ success: true, stats });
   } catch (error) {
-    console.error('Error in /tickets/stats:', error); // Log full error internally
-    res.status(500).json({
-      error: 'Failed to fetch statistics',
-      message: 'An error occurred while retrieving statistics. Please try again later.',
-    });
+    console.error('Error in /tickets/stats:', error);
+    res.status(500).json({ error: 'Failed to fetch statistics', message: 'Please try again later.' });
   }
 });
 
 /**
  * POST /assign
- * Assign team to a ticket
- * Rate limited: 60 requests per 15 minutes per IP
  */
-app.post('/assign', moderateLimiter, async (req, res) => {
+app.post('/assign', requireAuth, moderateLimiter, async (req, res) => {
   try {
     const { category, priority, summary, ticketId } = req.body;
-
     if (!category || !priority || !summary) {
-      return res.status(400).json({
-        error: 'Validation failed',
-        messages: ['Fields category, priority, and summary are required'],
-      });
+      return res.status(400).json({ error: 'Validation failed', messages: ['Fields category, priority, and summary are required'] });
     }
 
     const result = await assignTeam({ category, priority, summary });
@@ -210,194 +211,280 @@ app.post('/assign', moderateLimiter, async (req, res) => {
     if (ticketId) {
       const db = await getDbConnection();
       await db.run(
-        `INSERT INTO incident_assignments (incident_id, assigned_team) 
-         VALUES (?, ?) 
-         ON CONFLICT(incident_id) DO UPDATE SET assigned_team = excluded.assigned_team`,
+        `INSERT INTO incident_assignments (incident_id, assigned_team) VALUES (?, ?) ON CONFLICT(incident_id) DO UPDATE SET assigned_team = excluded.assigned_team`,
         [ticketId, JSON.stringify(result.team)]
       );
     }
 
-    res.json({
-      success: true,
-      ...result,
-    });
+    res.json({ success: true, ...result });
   } catch (error) {
-    console.error('Error in /assign:', error); // Log full error internally
-    res.status(500).json({
-      error: 'Failed to assign team',
-      message: 'An error occurred while assigning the team. Please try again later.',
-    });
+    console.error('Error in /assign:', error);
+    res.status(500).json({ error: 'Failed to assign team', message: 'Please try again later.' });
   }
 });
 
 /**
  * POST /diagram
- * Generate a system architecture diagram prompt from incident data
- * Rate limited: 60 requests per 15 minutes per IP
  */
-app.post('/diagram', moderateLimiter, async (req, res) => {
+app.post('/diagram', requireAuth, moderateLimiter, async (req, res) => {
   try {
     const { category, priority, summary, possible_cause } = req.body;
-
     if (!category || !priority || !summary || !possible_cause) {
-      return res.status(400).json({
-        error: 'Validation failed',
-        messages: ['Fields category, priority, summary, and possible_cause are required'],
-      });
+      return res.status(400).json({ error: 'Validation failed', messages: ['Fields category, priority, summary, and possible_cause are required'] });
     }
-
     const result = await generateDiagram({ category, priority, summary, possible_cause });
-
     res.json({ success: true, ...result });
   } catch (error) {
     console.error('Error in /diagram:', error);
-    res.status(500).json({
-      error: 'Failed to generate diagram',
-      message: 'An error occurred while generating the diagram. Please try again later.',
-    });
+    res.status(500).json({ error: 'Failed to generate diagram', message: 'Please try again later.' });
   }
 });
 
 /**
  * POST /tickets/:id/resolve
- * Mark ticket as resolved and notify reporter
- * Rate limited: 60 requests per 15 minutes per IP
  */
-app.post('/tickets/:id/resolve', moderateLimiter, async (req, res) => {
+app.post('/tickets/:id/resolve', requireAuth, moderateLimiter, async (req, res) => {
   try {
     const { id } = req.params;
     const { reporterEmail, resolution } = req.body;
 
-    // Validate email
     const emailValidation = validateEmail(reporterEmail);
     if (!emailValidation.valid) {
-      return res.status(400).json({
-        error: 'Validation failed',
-        messages: [emailValidation.error],
-      });
+      return res.status(400).json({ error: 'Validation failed', messages: [emailValidation.error] });
     }
 
     const tickets = await getAllTickets();
     const ticket = tickets.find((t) => t.id === id || t.jiraId === id);
-
-    if (!ticket) {
-      return res.status(404).json({
-        error: 'Not found',
-        message: 'Ticket not found',
-      });
-    }
+    if (!ticket) return res.status(404).json({ error: 'Not found', message: 'Ticket not found' });
 
     await notifyReporterResolved({
       ticket,
       reporterEmail,
-      resolution:
-        resolution ||
-        'The issue has been investigated and resolved by the SRE team.',
+      resolution: resolution || 'The issue has been investigated and resolved by the SRE team.',
     });
 
-    console.log(`✅ Resolution email sent for ticket ${id} to ${reporterEmail}`);
-
-    res.json({
-      success: true,
-      message: 'Resolution notification sent',
-      ticketId: id,
-    });
+    res.json({ success: true, message: 'Resolution notification sent', ticketId: id });
   } catch (error) {
-    console.error('Error in /tickets/:id/resolve:', error); // Log full error internally
-    res.status(500).json({
-      error: 'Failed to resolve ticket',
-      message: 'An error occurred while resolving the ticket. Please try again later.',
-    });
+    console.error('Error in /tickets/:id/resolve:', error);
+    res.status(500).json({ error: 'Failed to resolve ticket', message: 'Please try again later.' });
+  }
+});
+
+// ─── Admin-only routes ────────────────────────────────────────────────────────
+
+/**
+ * GET /admin/users — list all accounts
+ */
+app.get('/admin/users', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const users = await getAllUsers();
+    res.json({ success: true, users });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
 /**
- * POST /saleor/enrich
- * On-demand Saleor enrichment for an incident text + triage result.
- * Useful for manual investigation or re-enrichment of existing tickets.
- * Rate limited: 60 requests per 15 minutes per IP
+ * POST /admin/users — create a new user account
+ * Body: { name, email, password }
  */
-app.post('/saleor/enrich', moderateLimiter, async (req, res) => {
+app.post('/admin/users', requireAuth, requireAdmin, async (req, res) => {
   try {
-    const { text, category, priority, summary } = req.body;
-
-    if (!text || typeof text !== 'string' || text.trim().length === 0) {
-      return res.status(400).json({
-        error: 'Validation failed',
-        messages: ['Field "text" is required and must be a non-empty string'],
-      });
+    const { name, email, password } = req.body;
+    if (!name || !email || !password) {
+      return res.status(400).json({ error: 'name, email and password are required' });
     }
-
-    const sanitizedText = sanitizeInput(text);
-
-    // Accept a pre-computed triage result or fall back to defaults
-    const triageResult = {
-      category: category || 'other',
-      priority: priority || 'medium',
-      summary: summary || sanitizedText.substring(0, 100),
-    };
-
-    const entities = extractEntities(sanitizedText);
-    const enrichment = await enrichIncident(sanitizedText, triageResult);
-
-    res.json({ success: true, entities, ...enrichment });
-  } catch (error) {
-    console.error('Error in /saleor/enrich:', error);
-    res.status(500).json({
-      error: 'Enrichment failed',
-      message: 'An error occurred while enriching the incident with Saleor data.',
-    });
+    const result = await createUser({ name, email, password });
+    res.status(201).json({ success: true, user: result.user });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
   }
 });
 
-// 404 handler
+/**
+ * PATCH /admin/users/:id — update name/email of a user
+ * Body: { name?, email? }
+ */
+app.patch('/admin/users/:id', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { name, email } = req.body;
+    const user = await updateUser(Number(req.params.id), { name, email });
+    res.json({ success: true, user });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+/**
+ * DELETE /admin/users/:id — remove a user account
+ */
+app.delete('/admin/users/:id', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    await deleteUser(Number(req.params.id));
+    res.json({ success: true, message: 'User deleted' });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+// ─── Admin: Engineers ─────────────────────────────────────────────────────────
+
+/**
+ * GET /admin/engineers — list all engineers with their skills
+ */
+app.get('/admin/engineers', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const db = await getDbConnection();
+    const engineers = await db.all(`
+      SELECT
+        u.id, u.name, u.email, u.role, u.experience_years,
+        GROUP_CONCAT(s.name || ':' || us.level, '|') AS skills_raw
+      FROM users u
+      LEFT JOIN user_skills us ON us.user_id = u.id
+      LEFT JOIN skills s ON s.id = us.skill_id
+      GROUP BY u.id
+      ORDER BY u.id ASC
+    `);
+
+    const skills = await db.all('SELECT * FROM skills ORDER BY name ASC');
+
+    const result = engineers.map(e => ({
+      id: e.id,
+      name: e.name,
+      email: e.email,
+      role: e.role,
+      experience_years: e.experience_years,
+      skills: e.skills_raw
+        ? e.skills_raw.split('|').map(s => {
+            const [name, level] = s.split(':');
+            return { name, level: Number(level) };
+          })
+        : [],
+    }));
+
+    res.json({ success: true, engineers: result, availableSkills: skills });
+  } catch (err) {
+    console.error('Error in GET /admin/engineers:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /admin/engineers — create a new engineer
+ */
+app.post('/admin/engineers', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { name, email, role, experience_years } = req.body;
+    if (!name || !email || !role) {
+      return res.status(400).json({ error: 'name, email and role are required' });
+    }
+    const db = await getDbConnection();
+    const existing = await db.get('SELECT id FROM users WHERE email = ?', [email]);
+    if (existing) return res.status(409).json({ error: 'Email already in use' });
+
+    const result = await db.run(
+      'INSERT INTO users (name, email, role, experience_years) VALUES (?, ?, ?, ?)',
+      [name, email, role, Number(experience_years) || 0]
+    );
+    const engineer = await db.get('SELECT * FROM users WHERE id = ?', [result.lastID]);
+    res.status(201).json({ success: true, engineer });
+  } catch (err) {
+    console.error('Error in POST /admin/engineers:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * PATCH /admin/engineers/:id — update engineer fields
+ */
+app.patch('/admin/engineers/:id', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { name, email, role, experience_years } = req.body;
+    const db = await getDbConnection();
+    const existing = await db.get('SELECT id FROM users WHERE id = ?', [req.params.id]);
+    if (!existing) return res.status(404).json({ error: 'Engineer not found' });
+
+    await db.run(
+      `UPDATE users SET
+        name             = COALESCE(?, name),
+        email            = COALESCE(?, email),
+        role             = COALESCE(?, role),
+        experience_years = COALESCE(?, experience_years)
+       WHERE id = ?`,
+      [name ?? null, email ?? null, role ?? null, experience_years ?? null, req.params.id]
+    );
+    const engineer = await db.get('SELECT * FROM users WHERE id = ?', [req.params.id]);
+    res.json({ success: true, engineer });
+  } catch (err) {
+    console.error('Error in PATCH /admin/engineers/:id:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * DELETE /admin/engineers/:id — remove an engineer
+ */
+app.delete('/admin/engineers/:id', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const db = await getDbConnection();
+    const existing = await db.get('SELECT id FROM users WHERE id = ?', [req.params.id]);
+    if (!existing) return res.status(404).json({ error: 'Engineer not found' });
+    await db.run('DELETE FROM users WHERE id = ?', [req.params.id]);
+    res.json({ success: true, message: 'Engineer deleted' });
+  } catch (err) {
+    console.error('Error in DELETE /admin/engineers/:id:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /saleor/enrich — enrich a ticket with Saleor data
+ */
+app.post('/saleor/enrich', requireAuth, async (req, res) => {
+  try {
+    const { incidentText, category, priority, summary } = req.body;
+    if (!incidentText) return res.status(400).json({ error: 'incidentText is required' });
+    const triageResult = { category, priority, summary };
+    const result = await enrichIncident(incidentText, triageResult);
+    res.json(result);
+  } catch (err) {
+    console.error('Error in POST /saleor/enrich:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── Error handlers ───────────────────────────────────────────────────────────
+
 app.use((req, res) => {
-  res.status(404).json({
-    error: 'Not found',
-    message: 'The requested resource was not found',
-  });
+  res.status(404).json({ error: 'Not found', message: 'The requested resource was not found' });
 });
 
-// Global error handler
 app.use((err, req, res, next) => {
-  console.error('Unhandled error:', err); // Log full error internally
-
-  // Handle multer file upload errors
+  console.error('Unhandled error:', err);
   if (err instanceof multer.MulterError) {
-    return res.status(400).json({
-      error: 'File upload failed',
-      message: 'The uploaded file is invalid or too large',
-    });
+    return res.status(400).json({ error: 'File upload failed', message: 'The uploaded file is invalid or too large' });
   }
-
-  // Handle rate limit errors (shouldn't reach here due to middleware)
-  if (err.status === 429) {
-    return res.status(429).json({
-      error: 'Too many requests',
-      message: 'Please try again later',
-    });
-  }
-
-  // Generic error response (don't expose internals)
-  res.status(500).json({
-    error: 'Internal server error',
-    message: 'An unexpected error occurred. Please try again later.',
-  });
+  res.status(500).json({ error: 'Internal server error', message: 'An unexpected error occurred.' });
 });
 
-// Init DB and start server
+// ─── Start ────────────────────────────────────────────────────────────────────
+
 initDb()
   .then(() => {
     app.listen(PORT, () => {
-      console.log(`Server running at http://localhost:${PORT}`);
-      console.log(`POST /ingest - Submit a ticket for triage`);
-      console.log(`GET /tickets - Get all tickets`);
-      console.log(`GET /tickets/stats - Get ticket statistics`);
-      console.log(`POST /assign - Assign team`);
-      console.log(`POST /tickets/:id/resolve - Send resolution email`);
-      console.log(`POST /diagram - Generate system diagram prompt`);
-      console.log(`GET /health - Health check`);
-      console.log(`POST /saleor/enrich - Enrich incident with Saleor e-commerce data`);
+      console.log(`🚀 Server running at http://localhost:${PORT}`);
+      console.log(`🔐 POST /auth/register        — Register new user`);
+      console.log(`🔐 POST /auth/login           — Login`);
+      console.log(`📝 POST /ingest               — Submit ticket (auth required)`);
+      console.log(`📋 GET  /tickets              — Get all tickets (auth required)`);
+      console.log(`📊 GET  /tickets/stats        — Ticket statistics (auth required)`);
+      console.log(`🤖 POST /assign               — Assign team (auth required)`);
+      console.log(`✅ POST /tickets/:id/resolve  — Resolve ticket (auth required)`);
+      console.log(`📊 POST /diagram              — Generate diagram (auth required)`);
+      console.log(`👑 GET  /admin/users          — List users (admin only)`);
+      console.log(`👑 POST /admin/users          — Create user (admin only)`);
+      console.log(`👑 PATCH /admin/users/:id     — Update user (admin only)`);
+      console.log(`👑 DELETE /admin/users/:id    — Delete user (admin only)`);
     });
   })
   .catch((err) => {

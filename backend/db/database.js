@@ -2,12 +2,10 @@ import sqlite3 from 'sqlite3';
 import { open } from 'sqlite';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import fs from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Database path
 const dbPath = path.resolve(__dirname, 'agenx.db');
 
 export async function getDbConnection() {
@@ -20,13 +18,20 @@ export async function getDbConnection() {
 export async function initDb() {
     const db = await getDbConnection();
 
-    // Enable foreign keys
     await db.exec('PRAGMA foreign_keys = ON;');
-
     console.log('Inicializando base de datos SQLite...');
 
-    // Create tables
+    // ─── Core tables ──────────────────────────────────────────────────────────
     await db.exec(`
+    CREATE TABLE IF NOT EXISTS accounts (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      name       TEXT    NOT NULL,
+      email      TEXT    NOT NULL UNIQUE,
+      password   TEXT    NOT NULL,
+      role       TEXT    NOT NULL DEFAULT 'user',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
@@ -58,12 +63,14 @@ export async function initDb() {
     );
   `);
 
-    // Check if we need to seed data
-    const userCount = await db.get('SELECT COUNT(*) as count FROM users');
+    // ─── Seed admin account ───────────────────────────────────────────────────
+    const { initAccountsTable } = await import('../modules/auth/auth.service.js');
+    await initAccountsTable(db);
 
+    // ─── Seed engineers ───────────────────────────────────────────────────────
+    const userCount = await db.get('SELECT COUNT(*) as count FROM users');
     if (userCount.count === 0) {
         console.log('Poblando base de datos con ingenieros iniciales (Seed)...');
-
         await db.exec(`
       INSERT INTO users (name, email, role, experience_years) VALUES 
         ('Ana García', 'ana.garcia@agenx.dev', 'Backend Engineer', 5),

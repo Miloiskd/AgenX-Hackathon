@@ -1,128 +1,174 @@
 const API_BASE_URL = 'http://localhost:3000';
 
-// Upload/Ingest data with optional files
+// ─── Helper ───────────────────────────────────────────────────────────────────
+
+function getToken() {
+  return localStorage.getItem('agenx_token');
+}
+
+function authHeaders(extra = {}) {
+  return {
+    Authorization: `Bearer ${getToken()}`,
+    ...extra,
+  };
+}
+
+async function handleResponse(res) {
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || data.message || `Error ${res.status}`);
+  return data;
+}
+
+// ─── Auth ─────────────────────────────────────────────────────────────────────
+
+export const loginApi = async (email, password) => {
+  const res = await fetch(`${API_BASE_URL}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+  return handleResponse(res);
+};
+
+export const registerApi = async (name, email, password) => {
+  const res = await fetch(`${API_BASE_URL}/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, email, password }),
+  });
+  return handleResponse(res);
+};
+
+// ─── Tickets ──────────────────────────────────────────────────────────────────
+
 export const submitTicket = async (text, photo = null, logs = null) => {
-  try {
-    // If we have files, use FormData; otherwise use JSON
-    if (photo || logs) {
-      const formData = new FormData();
-      formData.append('text', text);
-      if (photo) {
-        formData.append('photo', photo);
-      }
-      if (logs) {
-        formData.append('logs', logs);
-      }
+  if (photo || logs) {
+    const formData = new FormData();
+    formData.append('text', text);
+    if (photo) formData.append('photo', photo);
+    if (logs)  formData.append('logs', logs);
 
-      const response = await fetch(`${API_BASE_URL}/ingest`, {
-        method: 'POST',
-        body: formData,
-        // Don't set Content-Type header - browser will set it correctly for multipart/form-data
-      });
-
-      if (!response.ok) {
-        throw new Error(`Error: ${response.status}`);
-      }
-
-      return await response.json();
-    } else {
-      // Use JSON for text-only requests
-      const response = await fetch(`${API_BASE_URL}/ingest`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ text }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Error: ${response.status}`);
-      }
-
-      return await response.json();
-    }
-  } catch (error) {
-    throw new Error(`Failed to submit ticket: ${error.message}`);
+    const res = await fetch(`${API_BASE_URL}/ingest`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: formData,
+    });
+    return handleResponse(res);
   }
+
+  const res = await fetch(`${API_BASE_URL}/ingest`, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ text }),
+  });
+  return handleResponse(res);
 };
 
-// Get all tickets
 export const getTickets = async () => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/tickets`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    // Backend returns { success, count, tickets: [...] }
-    return data.tickets || [];
-  } catch (error) {
-    throw new Error(`Failed to fetch tickets: ${error.message}`);
-  }
+  const res = await fetch(`${API_BASE_URL}/tickets`, {
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+  });
+  const data = await handleResponse(res);
+  return data.tickets || [];
 };
 
-// Enrich an incident with Saleor e-commerce data
-export const saleorEnrichApi = async (text, category, priority, summary) => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/saleor/enrich`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, category, priority, summary }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Error: ${response.status}`);
-    }
-
-    return await response.json();
-  } catch (error) {
-    throw new Error(`Failed to enrich with Saleor: ${error.message}`);
-  }
-};
-
-// Generate system diagram prompt for an incident
 export const generateDiagramApi = async (category, priority, summary, possible_cause) => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/diagram`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ category, priority, summary, possible_cause }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Error: ${response.status}`);
-    }
-
-    return await response.json();
-  } catch (error) {
-    throw new Error(`Failed to generate diagram: ${error.message}`);
-  }
+  const res = await fetch(`${API_BASE_URL}/diagram`, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ category, priority, summary, possible_cause }),
+  });
+  return handleResponse(res);
 };
 
-// Assign team to a ticket
 export const assignTeamApi = async (ticketId, category, priority, summary) => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/assign`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ ticketId, category, priority, summary }),
-    });
+  const res = await fetch(`${API_BASE_URL}/assign`, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ ticketId, category, priority, summary }),
+  });
+  return handleResponse(res);
+};
 
-    if (!response.ok) {
-      throw new Error(`Error: ${response.status}`);
-    }
+// ─── Admin ────────────────────────────────────────────────────────────────────
 
-    return await response.json();
-  } catch (error) {
-    throw new Error(`Failed to assign team: ${error.message}`);
-  }
+export const getAdminUsers = async (token) => {
+  const res = await fetch(`${API_BASE_URL}/admin/users`, {
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+  });
+  const data = await handleResponse(res);
+  return data.users || [];
+};
+
+export const createAdminUser = async (token, { name, email, password }) => {
+  const res = await fetch(`${API_BASE_URL}/admin/users`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, email, password }),
+  });
+  return handleResponse(res);
+};
+
+export const updateAdminUser = async (token, id, { name, email }) => {
+  const res = await fetch(`${API_BASE_URL}/admin/users/${id}`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, email }),
+  });
+  return handleResponse(res);
+};
+
+export const deleteAdminUser = async (token, id) => {
+  const res = await fetch(`${API_BASE_URL}/admin/users/${id}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+  });
+  return handleResponse(res);
+};
+
+// ─── Admin: Engineers ─────────────────────────────────────────────────────────
+
+export const getAdminEngineers = async (token) => {
+  const res = await fetch(`${API_BASE_URL}/admin/engineers`, {
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+  });
+  const data = await handleResponse(res);
+  return { engineers: data.engineers || [], availableSkills: data.availableSkills || [] };
+};
+
+export const createAdminEngineer = async (token, body) => {
+  const res = await fetch(`${API_BASE_URL}/admin/engineers`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  return handleResponse(res);
+};
+
+export const updateAdminEngineer = async (token, id, body) => {
+  const res = await fetch(`${API_BASE_URL}/admin/engineers/${id}`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  return handleResponse(res);
+};
+
+export const deleteAdminEngineer = async (token, id) => {
+  const res = await fetch(`${API_BASE_URL}/admin/engineers/${id}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+  });
+  return handleResponse(res);
+};
+
+// ─── Saleor Enrichment ────────────────────────────────────────────────────────
+
+export const saleorEnrichApi = async (incidentText, category, priority, summary) => {
+  const res = await fetch(`${API_BASE_URL}/saleor/enrich`, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ incidentText, category, priority, summary }),
+  });
+  return handleResponse(res);
 };

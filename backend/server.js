@@ -10,6 +10,12 @@ import { generateDiagram } from './modules/diagram/index.js';
 import { notifyReporterResolved } from './modules/gmail/index.js';
 import { enrichIncident } from './modules/saleor/saleor.enrichment.js';
 import {
+  getTicketLogs,
+  analyzeAndResolve,
+  updateTicketResolution,
+  getAllResolutions,
+} from './modules/observability/index.js';
+import {
   requireAuth,
   requireAdmin,
   register,
@@ -143,6 +149,21 @@ app.post(
 
       const ticket = await triageAndCreateTicket(sanitizedText, ticketData);
 
+      // Persist uploaded logs file so the observability module can use real logs
+      if (req.files?.logs?.[0]) {
+        try {
+          const logsContent = req.files.logs[0].buffer.toString('utf-8');
+          const db = await getDbConnection();
+          await db.run(
+            'INSERT OR REPLACE INTO ticket_logs (ticket_id, logs) VALUES (?, ?)',
+            [ticket.jiraKey, logsContent]
+          );
+          console.log(`📄 Logs saved for ticket ${ticket.jiraKey} (${logsContent.length} chars)`);
+        } catch (logErr) {
+          console.warn('⚠️  Failed to save logs file:', logErr.message);
+        }
+      }
+
       res.status(201).json({
         success: true,
         message: 'Ticket created successfully',
@@ -171,9 +192,16 @@ app.get('/tickets', requireAuth, moderateLimiter, async (req, res) => {
       return acc;
     }, {});
 
+    const resolutions = await getAllResolutions();
+    const resolutionMap = resolutions.reduce((acc, row) => {
+      acc[row.ticket_id] = row.resolved === 1 ? 'RESOLVED' : 'UNRESOLVED';
+      return acc;
+    }, {});
+
     const enrichedTickets = tickets.map((ticket) => ({
       ...ticket,
       assignedTeam: assignmentMap[ticket.id] || null,
+      resolutionStatus: resolutionMap[ticket.id] || null,
     }));
 
     res.json({ success: true, count: enrichedTickets.length, tickets: enrichedTickets });
@@ -241,32 +269,74 @@ app.post('/diagram', requireAuth, moderateLimiter, async (req, res) => {
 });
 
 /**
- * POST /tickets/:id/resolve
+ * GET /tickets/:id/logs
+ * Returns system logs associated with a ticket (generates sample logs if none exist).
  */
-app.post('/tickets/:id/resolve', requireAuth, moderateLimiter, async (req, res) => {
+app.get('/tickets/:id/logs', requireAuth, moderateLimiter, async (req, res) => {
   try {
     const { id } = req.params;
-    const { reporterEmail, resolution } = req.body;
-
-    const emailValidation = validateEmail(reporterEmail);
-    if (!emailValidation.valid) {
-      return res.status(400).json({ error: 'Validation failed', messages: [emailValidation.error] });
-    }
-
     const tickets = await getAllTickets();
     const ticket = tickets.find((t) => t.id === id || t.jiraId === id);
     if (!ticket) return res.status(404).json({ error: 'Not found', message: 'Ticket not found' });
 
-    await notifyReporterResolved({
-      ticket,
-      reporterEmail,
-      resolution: resolution || 'The issue has been investigated and resolved by the SRE team.',
-    });
-
-    res.json({ success: true, message: 'Resolution notification sent', ticketId: id });
+    const logs = await getTicketLogs(id, { category: ticket.category });
+    res.json({ ticket_id: id, logs });
   } catch (error) {
-    console.error('Error in /tickets/:id/resolve:', error);
+    console.error('Error in GET /tickets/:id/logs:', error);
+    res.status(500).json({ error: 'Failed to fetch logs', message: 'Please try again later.' });
+  }
+});
+
+/**
+ * POST /tickets/:id/resolve
+ * AI-powered observability pipeline: analyze logs → propose fix → execute action → validate.
+ */
+app.post('/tickets/:id/resolve', requireAuth, moderateLimiter, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const tickets = await getAllTickets();
+    const ticket = tickets.find((t) => t.id === id || t.jiraId === id);
+    if (!ticket) return res.status(404).json({ error: 'Not found', message: 'Ticket not found' });
+
+    const result = await analyzeAndResolve(id, ticket);
+
+    // Non-blocking email notification if auto-resolved and reporterEmail provided
+    const { reporterEmail } = req.body;
+    if (reporterEmail && result.validation.resolved) {
+      const emailValidation = validateEmail(reporterEmail);
+      if (emailValidation.valid) {
+        notifyReporterResolved({
+          ticket,
+          reporterEmail,
+          resolution: result.solution,
+        }).catch((err) => console.warn('⚠️  Resolution email failed:', err.message));
+      }
+    }
+
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error('Error in POST /tickets/:id/resolve:', error);
     res.status(500).json({ error: 'Failed to resolve ticket', message: 'Please try again later.' });
+  }
+});
+
+/**
+ * PATCH /tickets/:id/status
+ * User confirms whether the ticket was resolved or not.
+ * Body: { resolved: true | false }
+ */
+app.patch('/tickets/:id/status', requireAuth, moderateLimiter, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { resolved } = req.body;
+    if (typeof resolved !== 'boolean') {
+      return res.status(400).json({ error: 'Validation failed', message: '"resolved" must be a boolean' });
+    }
+    const result = await updateTicketResolution(id, resolved);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error('Error in PATCH /tickets/:id/status:', error);
+    res.status(500).json({ error: 'Failed to update status', message: 'Please try again later.' });
   }
 });
 

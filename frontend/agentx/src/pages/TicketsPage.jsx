@@ -1,5 +1,13 @@
 import { useState, useEffect } from 'react';
-import { getTickets, assignTeamApi, generateDiagramApi, saleorEnrichApi } from '../services/api';
+import {
+  getTickets,
+  assignTeamApi,
+  generateDiagramApi,
+  saleorEnrichApi,
+  getTicketLogsApi,
+  resolveTicketAiApi,
+  updateTicketStatusApi,
+} from '../services/api';
 import { DiagramViewer } from '../components/DiagramViewer';
 
 export function TicketsPage() {
@@ -19,6 +27,14 @@ export function TicketsPage() {
   const [enrichmentData, setEnrichmentData] = useState(null);
   const [enriching, setEnriching] = useState(false);
   const [enrichmentError, setEnrichmentError] = useState(null);
+
+  // Observability state
+  const [logsData, setLogsData] = useState(null);
+  const [logsLoading, setLogsLoading] = useState(false);
+  const [resolveData, setResolveData] = useState(null);
+  const [resolving, setResolving] = useState(false);
+  const [resolveError, setResolveError] = useState(null);
+  const [confirmedStatus, setConfirmedStatus] = useState(null); // 'resolved' | 'unresolved' | null
 
   useEffect(() => {
     fetchTickets();
@@ -51,11 +67,28 @@ export function TicketsPage() {
     }
   };
 
-  const handleOpenModal = (ticket) => {
+  const handleOpenModal = async (ticket) => {
     setSelectedTicket(ticket);
     setPossibleCause(ticket.description || ticket.summary || '');
     setDiagramData(null);
     setDiagramError(null);
+    setEnrichmentData(null);
+    setEnrichmentError(null);
+    setResolveData(null);
+    setResolveError(null);
+    setConfirmedStatus(ticket.resolutionStatus === 'RESOLVED' ? 'resolved' : ticket.resolutionStatus === 'UNRESOLVED' ? 'unresolved' : null);
+
+    // Auto-load logs
+    setLogsData(null);
+    setLogsLoading(true);
+    try {
+      const data = await getTicketLogsApi(ticket.id);
+      setLogsData(data.logs);
+    } catch {
+      setLogsData(null);
+    } finally {
+      setLogsLoading(false);
+    }
   };
 
   const handleCloseModal = () => {
@@ -64,6 +97,10 @@ export function TicketsPage() {
     setDiagramError(null);
     setEnrichmentData(null);
     setEnrichmentError(null);
+    setLogsData(null);
+    setResolveData(null);
+    setResolveError(null);
+    setConfirmedStatus(null);
   };
 
   const handleSaleorEnrich = async () => {
@@ -106,6 +143,40 @@ export function TicketsPage() {
     }
   };
 
+  const handleResolve = async () => {
+    if (!selectedTicket) return;
+    setResolving(true);
+    setResolveError(null);
+    setResolveData(null);
+    try {
+      const result = await resolveTicketAiApi(selectedTicket.id);
+      setResolveData(result);
+    } catch (err) {
+      setResolveError(err.message);
+    } finally {
+      setResolving(false);
+    }
+  };
+
+  const handleConfirmStatus = async (resolved) => {
+    if (!selectedTicket) return;
+    try {
+      await updateTicketStatusApi(selectedTicket.id, resolved);
+      const status = resolved ? 'resolved' : 'unresolved';
+      setConfirmedStatus(status);
+      // Update the ticket in the list without refetching
+      setTickets((prev) =>
+        prev.map((t) =>
+          t.id === selectedTicket.id
+            ? { ...t, resolutionStatus: resolved ? 'RESOLVED' : 'UNRESOLVED' }
+            : t
+        )
+      );
+    } catch (err) {
+      setResolveError(err.message);
+    }
+  };
+
   if (loading) {
     return <div className="page-container"><p>Loading tickets...</p></div>;
   }
@@ -135,9 +206,17 @@ export function TicketsPage() {
             >
               <div className="ticket-header">
                 <h3>{ticket.summary || `Ticket ${ticket.id}`}</h3>
-                <span className={`status-badge status-${ticket.status?.toLowerCase() || 'unknown'}`}>
-                  {ticket.status || 'Unknown'}
-                </span>
+                <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                  {ticket.resolutionStatus === 'RESOLVED' && (
+                    <span className="resolution-badge resolution-badge--resolved">Resolved</span>
+                  )}
+                  {ticket.resolutionStatus === 'UNRESOLVED' && (
+                    <span className="resolution-badge resolution-badge--unresolved">Unresolved</span>
+                  )}
+                  <span className={`status-badge status-${ticket.status?.toLowerCase() || 'unknown'}`}>
+                    {ticket.status || 'Unknown'}
+                  </span>
+                </div>
               </div>
               <div className="ticket-body">
                 <p><strong>ID:</strong> {ticket.id}</p>
@@ -231,6 +310,112 @@ export function TicketsPage() {
               </div>
             </div>
 
+            {/* ── Observability: Logs ── */}
+            <div className="modal-section">
+              <h4 className="modal-section-title">System Logs</h4>
+              {logsLoading ? (
+                <div className="obs-loading">
+                  <span className="spinner" /> Loading logs...
+                </div>
+              ) : logsData ? (
+                <pre className="obs-logs">{logsData}</pre>
+              ) : (
+                <p className="obs-empty">No logs available for this ticket.</p>
+              )}
+            </div>
+
+            {/* ── Observability: Resolve ── */}
+            <div className="modal-section">
+              <h4 className="modal-section-title">AI-Assisted Resolution</h4>
+
+              {confirmedStatus === 'resolved' && (
+                <div className="obs-status-banner obs-status-banner--resolved">
+                  Ticket marked as <strong>RESOLVED</strong>
+                </div>
+              )}
+              {confirmedStatus === 'unresolved' && (
+                <div className="obs-status-banner obs-status-banner--unresolved">
+                  Ticket marked as <strong>NOT RESOLVED</strong> — escalation recommended
+                </div>
+              )}
+
+              {!confirmedStatus && (
+                <button
+                  className="obs-resolve-btn"
+                  onClick={handleResolve}
+                  disabled={resolving}
+                >
+                  {resolving ? (
+                    <span className="button-loading">
+                      <span className="spinner" /> Analyzing &amp; resolving...
+                    </span>
+                  ) : (
+                    'Resolver problema'
+                  )}
+                </button>
+              )}
+
+              {resolveError && (
+                <div className="alert alert-error" style={{ marginTop: '12px' }}>
+                  <strong>Error:</strong> {resolveError}
+                </div>
+              )}
+
+              {resolveData && !confirmedStatus && (
+                <div className="obs-result">
+                  {/* Root cause */}
+                  <div className="obs-result-card">
+                    <p className="obs-result-label">Root Cause</p>
+                    <p className="obs-result-text">{resolveData.root_cause}</p>
+                  </div>
+
+                  {/* Solution */}
+                  <div className="obs-result-card">
+                    <p className="obs-result-label">Proposed Solution</p>
+                    <p className="obs-result-text">{resolveData.solution}</p>
+                  </div>
+
+                  {/* Action taken */}
+                  <div className="obs-result-card">
+                    <p className="obs-result-label">Action Executed</p>
+                    <div className="obs-action-row">
+                      <span className={`obs-action-badge obs-action-badge--${resolveData.action_taken?.action || 'none'}`}>
+                        {resolveData.action_taken?.action || 'none'}
+                      </span>
+                      <span className="obs-action-message">{resolveData.action_taken?.message}</span>
+                    </div>
+                  </div>
+
+                  {/* Validation */}
+                  <div className={`obs-validation ${resolveData.validation?.resolved ? 'obs-validation--pass' : 'obs-validation--fail'}`}>
+                    <span className="obs-validation-icon">
+                      {resolveData.validation?.resolved ? '✓' : '✗'}
+                    </span>
+                    <span>{resolveData.validation?.message}</span>
+                  </div>
+
+                  {/* User confirmation */}
+                  <div className="obs-confirm">
+                    <p className="obs-confirm-label">¿El problema fue resuelto?</p>
+                    <div className="obs-confirm-actions">
+                      <button
+                        className="obs-confirm-btn obs-confirm-btn--yes"
+                        onClick={() => handleConfirmStatus(true)}
+                      >
+                        Sí, está resuelto
+                      </button>
+                      <button
+                        className="obs-confirm-btn obs-confirm-btn--no"
+                        onClick={() => handleConfirmStatus(false)}
+                      >
+                        No, escalar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Diagram Generation */}
             <div className="modal-section">
               <h4 className="modal-section-title">System Diagram</h4>
@@ -316,14 +501,12 @@ export function TicketsPage() {
 
               {enrichmentData && (
                 <div className="enrichment-result">
-                  {/* E-commerce badge */}
                   <div className="enrichment-badge-row">
                     <span className={`enrichment-badge ${enrichmentData.ecommerceRelated ? 'enrichment-badge--yes' : 'enrichment-badge--no'}`}>
                       {enrichmentData.ecommerceRelated ? 'E-commerce related' : 'Not e-commerce related'}
                     </span>
                   </div>
 
-                  {/* Extracted entities */}
                   {enrichmentData.extractedEntities && Object.values(enrichmentData.extractedEntities).some(Boolean) && (
                     <div className="enrichment-card">
                       <p className="enrichment-card-title">Extracted Entities</p>
@@ -340,7 +523,6 @@ export function TicketsPage() {
                     </div>
                   )}
 
-                  {/* Analysis */}
                   {enrichmentData.analysis && (
                     <div className="enrichment-card">
                       <p className="enrichment-card-title">Analysis</p>
@@ -361,7 +543,6 @@ export function TicketsPage() {
                     </div>
                   )}
 
-                  {/* Saleor live data */}
                   {enrichmentData.saleorData?.order && (
                     <div className="enrichment-card">
                       <p className="enrichment-card-title">Order from Saleor</p>

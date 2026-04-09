@@ -61,6 +61,24 @@ export async function initDb() {
       assigned_team TEXT NOT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+
+    CREATE TABLE IF NOT EXISTS ticket_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ticket_id TEXT NOT NULL UNIQUE,
+      logs TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS ticket_resolutions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ticket_id TEXT NOT NULL UNIQUE,
+      root_cause TEXT,
+      solution TEXT,
+      action TEXT,
+      auto_fix INTEGER DEFAULT 0,
+      resolved INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
   `);
 
     // ─── Seed admin account ───────────────────────────────────────────────────

@@ -162,6 +162,33 @@ export const deleteAdminEngineer = async (token, id) => {
   return handleResponse(res);
 };
 
+// ─── Observability ────────────────────────────────────────────────────────────
+
+export const getTicketLogsApi = async (ticketId) => {
+  const res = await fetch(`${API_BASE_URL}/tickets/${ticketId}/logs`, {
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+  });
+  return handleResponse(res);
+};
+
+export const resolveTicketAiApi = async (ticketId, reporterEmail = null) => {
+  const res = await fetch(`${API_BASE_URL}/tickets/${ticketId}/resolve`, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(reporterEmail ? { reporterEmail } : {}),
+  });
+  return handleResponse(res);
+};
+
+export const updateTicketStatusApi = async (ticketId, resolved) => {
+  const res = await fetch(`${API_BASE_URL}/tickets/${ticketId}/status`, {
+    method: 'PATCH',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ resolved }),
+  });
+  return handleResponse(res);
+};
+
 // ─── Saleor Enrichment ────────────────────────────────────────────────────────
 
 export const saleorEnrichApi = async (incidentText, category, priority, summary) => {

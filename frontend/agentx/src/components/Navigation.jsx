@@ -48,7 +48,7 @@ export function Navigation({ currentPage, setCurrentPage }) {
                 className={`nav-button ${currentPage === 'admin' ? 'active' : ''}`}
                 onClick={() => setCurrentPage('admin')}
               >
-                👑 Users
+                Users
               </button>
             </li>
           )}

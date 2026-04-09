@@ -14,7 +14,6 @@ const Icon = {
   ),
   Bot: ({ size = 28 }) => (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <rect x="3" y="8" width="18" height="13" rx="3" stroke="currentColor" strokeWidth="1.5"/>
       <path d="M9 12h.01M15 12h.01M9 16h6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
       <path d="M12 8V5M9 5h6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
     </svg>
@@ -87,7 +86,7 @@ function useReveal() {
 function ScrollIndicator() {
   return (
     <div className="lp-scroll-indicator">
-      <span className="lp-scroll-indicator__label">Explorar</span>
+      <span className="lp-scroll-indicator__label">Explore</span>
       <div className="lp-scroll-indicator__track">
         <div className="lp-scroll-indicator__dot" />
       </div>
@@ -121,11 +120,11 @@ export function LandingPage({ onGoLogin, onGoRegister }) {
         <div className="lp-nav__inner">
           <AgentXLogoText />
           <div className="lp-nav__links">
-            <button className="lp-nav__link" onClick={() => scrollTo('features')}>Capacidades</button>
-            <button className="lp-nav__link" onClick={() => scrollTo('workflow')}>Flujo</button>
-            <button className="lp-nav__link" onClick={() => scrollTo('integrations')}>Integraciones</button>
+            <button className="lp-nav__link" onClick={() => scrollTo('features')}>Capabilities</button>
+            <button className="lp-nav__link" onClick={() => scrollTo('workflow')}>Workflow</button>
+            <button className="lp-nav__link" onClick={() => scrollTo('integrations')}>Integrations</button>
           </div>
-          <button className="lp-btn lp-btn--outline" onClick={onGoLogin}>Acceder</button>
+          <button className="lp-btn lp-btn--outline" onClick={onGoLogin}>Sign in</button>
         </div>
       </nav>
 
@@ -136,24 +135,24 @@ export function LandingPage({ onGoLogin, onGoRegister }) {
           <div className={`lp-hero__left ${heroVisible ? 'lp-hero__left--in' : ''}`}>
             <div className="lp-badge">
               <Icon.Sparkles size={14} />
-              <span>Automatización inteligente</span>
+              <span>Intelligent automation</span>
             </div>
 
             <h1 className="lp-hero__h1">
-              <GlitchText text="El agente" />
+              <GlitchText text="The agent" />
               <br />
-              <span className="lp-hero__h1-grad">que resuelve</span>
+              <span className="lp-hero__h1-grad">that resolves</span>
               <br />
-              <GlitchText text="incidentes" />
+              <GlitchText text="incidents" />
             </h1>
 
             <p className="lp-hero__sub">
-              Sistema de ticketing con IA que automatiza el triage, clasificación y resolución de incidentes para e-commerce.
+              AI-powered ticketing system that automates triage, classification, and incident resolution for e-commerce.
             </p>
 
             <div className="lp-hero__cta">
               <button className="lp-btn lp-btn--primary lp-btn--lg" onClick={onGoRegister}>
-                Comenzar ahora
+                Get started
                 <Icon.ArrowRight />
               </button>
             </div>
@@ -161,15 +160,15 @@ export function LandingPage({ onGoLogin, onGoRegister }) {
             <div className="lp-hero__stats">
               <div className="lp-stat">
                 <span className="lp-stat__val">98%</span>
-                <span className="lp-stat__label">Tickets auto-clasificados</span>
+                <span className="lp-stat__label">Auto-classified tickets</span>
               </div>
               <div className="lp-stat">
                 <span className="lp-stat__val">3min</span>
-                <span className="lp-stat__label">Tiempo medio resolución</span>
+                <span className="lp-stat__label">Average resolution time</span>
               </div>
               <div className="lp-stat">
                 <span className="lp-stat__val">24/7</span>
-                <span className="lp-stat__label">Operación continua</span>
+                <span className="lp-stat__label">Continuous operation</span>
               </div>
             </div>
           </div>
@@ -197,62 +196,35 @@ export function LandingPage({ onGoLogin, onGoRegister }) {
         <div className="lp-section__inner">
           <div className={`lp-section__head ${featVisible ? 'lp-reveal' : ''}`}>
             <h2 className="lp-h2">
-              Capacidades <span className="lp-accent">autónomas</span>
+              Autonomous <span className="lp-accent">capabilities</span>
             </h2>
             <p className="lp-section__sub">
-              Un ecosistema de agentes especializados que trabajan en sincronía para resolver cada incidente.
+              Specialized agents working in sync to classify, route, and resolve incidents with fewer steps.
             </p>
           </div>
 
-          <div className="lp-bento">
-            {/* Large card */}
-            <div className={`lp-card lp-card--large ${featVisible ? 'lp-reveal lp-reveal--d1' : ''}`}>
+          <div className="lp-cap-grid">
+            <div className={`lp-card lp-card--feature ${featVisible ? 'lp-reveal lp-reveal--d1' : ''}`}>
               <div className="lp-card__glow" />
-              <div className="lp-card__icon-wrap">
-                <Icon.Bot size={28} />
-              </div>
-              <h3 className="lp-card__title">Triage Inteligente</h3>
+              <h3 className="lp-card__title">Intelligent Triage</h3>
               <p className="lp-card__desc">
-                Procesa y clasifica automáticamente cada incidente reportado, creando tickets iniciales con prioridad y categoría asignada mediante análisis de lenguaje natural.
+                Analyzes each incident and creates tickets with priority and category in seconds.
               </p>
-              <div className="lp-card__foot">
-                <div className="lp-avatars">
-                  {[1, 2, 3, 4].map(i => <div key={i} className="lp-avatar">{i}</div>)}
-                </div>
-                <span className="lp-card__foot-label">+2,400 tickets procesados hoy</span>
-              </div>
             </div>
 
-            {/* Shield */}
             <div className={`lp-card ${featVisible ? 'lp-reveal lp-reveal--d2' : ''}`}>
-              <div className="lp-card__icon-wrap"><Icon.Shield size={24} /></div>
-              <h3 className="lp-card__title">Seguridad</h3>
-              <p className="lp-card__desc">Validación de requests, saneamiento de inputs y rate-limiting para protección contra payloads maliciosos.</p>
+              <h3 className="lp-card__title">Auto Assignment</h3>
+              <p className="lp-card__desc">Routes each ticket to the best team based on workload, expertise, and availability.</p>
             </div>
 
-            {/* Assignment */}
             <div className={`lp-card ${featVisible ? 'lp-reveal lp-reveal--d3' : ''}`}>
-              <div className="lp-card__icon-wrap"><Icon.Workflow size={24} /></div>
-              <h3 className="lp-card__title">Asignación Automática</h3>
-              <p className="lp-card__desc">Determina el mejor equipo para atender cada ticket basándose en carga, expertise y disponibilidad.</p>
+              <h3 className="lp-card__title">Enrichment</h3>
+              <p className="lp-card__desc">Adds context from Saleor and connected systems for better responses.</p>
             </div>
 
-            {/* Enrichment */}
             <div className={`lp-card ${featVisible ? 'lp-reveal lp-reveal--d4' : ''}`}>
-              <div className="lp-card__icon-wrap"><Icon.Zap size={24} /></div>
-              <h3 className="lp-card__title">Enriquecimiento</h3>
-              <p className="lp-card__desc">Extrae entidades y contexto consultando sistemas externos como Saleor para mayor precisión.</p>
-            </div>
-
-            {/* Diagrams — wide */}
-            <div className={`lp-card lp-card--wide ${featVisible ? 'lp-reveal lp-reveal--d5' : ''}`}>
-              <div className="lp-card__row">
-                <div className="lp-card__icon-wrap lp-card__icon-wrap--sm"><Icon.GitBranch size={24} /></div>
-                <div>
-                  <h3 className="lp-card__title">Diagramas Automáticos</h3>
-                  <p className="lp-card__desc">Genera visualizaciones del flujo del incidente y organiza la información de forma visual para mejor comprensión del equipo.</p>
-                </div>
-              </div>
+              <h3 className="lp-card__title">Automatic Diagrams</h3>
+              <p className="lp-card__desc">Generates incident flow diagrams to speed up team understanding.</p>
             </div>
           </div>
         </div>
@@ -264,18 +236,18 @@ export function LandingPage({ onGoLogin, onGoRegister }) {
         <div className="lp-section__inner lp-section__inner--rel">
           <div className={`lp-section__head ${workVisible ? 'lp-reveal' : ''}`}>
             <h2 className="lp-h2">
-              Flujo de <span className="lp-accent">resolución</span>
+              Resolution <span className="lp-accent">workflow</span>
             </h2>
-            <p className="lp-section__sub">Desde la ingesta hasta la resolución, cada paso está optimizado por IA.</p>
+            <p className="lp-section__sub">From intake to resolution, in a short and traceable sequence.</p>
           </div>
 
           <div className="lp-steps">
             <div className="lp-steps__line" />
             {[
-              { step: '01', title: 'Ingesta',         desc: 'El incidente llega al sistema y es validado automáticamente.',     Icon: Icon.Ticket  },
-              { step: '02', title: 'Triage',           desc: 'IA analiza, clasifica y prioriza el ticket en segundos.',          Icon: Icon.Bot     },
-              { step: '03', title: 'Enriquecimiento',  desc: 'Se extraen datos de Saleor y sistemas conectados.',                Icon: Icon.Zap     },
-              { step: '04', title: 'Resolución',       desc: 'Asignación inteligente y notificación al equipo correcto.',        Icon: Icon.Mail    },
+              { step: '01', title: 'Intake',          desc: 'Automatic incident intake and validation.',                    Icon: Icon.Ticket },
+              { step: '02', title: 'Triage',          desc: 'AI-based classification and prioritization.',                 Icon: Icon.Bot    },
+              { step: '03', title: 'Enrichment',      desc: 'Additional context from Saleor and integrations.',             Icon: Icon.Zap    },
+              { step: '04', title: 'Resolution',      desc: 'Assignment to the right team with instant notification.',      Icon: Icon.Mail   },
             ].map((item, i) => (
               <div
                 key={item.step}
@@ -284,8 +256,10 @@ export function LandingPage({ onGoLogin, onGoRegister }) {
                 <div className="lp-step__icon-wrap">
                   <item.Icon size={32} />
                 </div>
-                <div className="lp-step__num">{item.step}</div>
-                <h3 className="lp-step__title">{item.title}</h3>
+                <div className="lp-step__head">
+                  <div className="lp-step__num">{item.step}</div>
+                  <h3 className="lp-step__title">{item.title}</h3>
+                </div>
                 <p className="lp-step__desc">{item.desc}</p>
               </div>
             ))}
@@ -298,9 +272,9 @@ export function LandingPage({ onGoLogin, onGoRegister }) {
         <div className="lp-section__inner">
           <div className={`lp-section__head ${intVisible ? 'lp-reveal' : ''}`}>
             <h2 className="lp-h2">
-              <span className="lp-accent">Conectado</span> a tu stack
+              <span className="lp-accent">Connected</span> to your stack
             </h2>
-            <p className="lp-section__sub">Integración nativa con las herramientas que ya usas.</p>
+            <p className="lp-section__sub">Native integration with the tools you already use.</p>
           </div>
 
           <div className="lp-integrations__grid">
@@ -327,11 +301,11 @@ export function LandingPage({ onGoLogin, onGoRegister }) {
         <div className="lp-footer__inner">
           <AgentXLogoText />
           <div className="lp-footer__links">
-            <a href="#" className="lp-footer__link">Documentación</a>
+            <a href="#" className="lp-footer__link">Documentation</a>
             <a href="#" className="lp-footer__link">API</a>
-            <a href="#" className="lp-footer__link">Soporte</a>
+            <a href="#" className="lp-footer__link">Support</a>
           </div>
-          <span className="lp-footer__copy">© 2026 AgentX_SYNCRO. Todos los derechos reservados.</span>
+          <span className="lp-footer__copy">© 2026 AgentX_SYNCRO. All rights reserved.</span>
         </div>
       </footer>
     </div>

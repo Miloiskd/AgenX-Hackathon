@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { loginApi } from '../services/api';
 
-export function LoginPage({ onGoRegister }) {
+export function LoginPage({ onGoRegister, onGoLanding }) {
   const { saveSession } = useAuth();
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
@@ -25,7 +25,14 @@ export function LoginPage({ onGoRegister }) {
 
   return (
     <div className="auth-page">
-      <div className="auth-card">
+      <div className="auth-shell">
+        <div className="auth-top-actions">
+          <button type="button" className="auth-back-button" onClick={onGoLanding}>
+            {'<'} Back to landing
+          </button>
+        </div>
+
+        <div className="auth-card">
         <div className="auth-header">
           <h1 className="auth-logo">AgenX</h1>
           <p className="auth-subtitle">SRE Incident Intake System</p>
@@ -83,6 +90,7 @@ export function LoginPage({ onGoRegister }) {
             Register
           </button>
         </p>
+        </div>
       </div>
     </div>
   );

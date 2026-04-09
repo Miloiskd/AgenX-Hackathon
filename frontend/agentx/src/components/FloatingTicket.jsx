@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react';
 import './FloatingTicket.css';
 
 const TICKET_TYPES = {
-  error:      { icon: '⚠', color: 'error',      label: 'Error'      },
-  success:    { icon: '✓', color: 'success',    label: 'Success'    },
-  pending:    { icon: '⏱', color: 'pending',    label: 'Pending'    },
-  processing: { icon: '⚡', color: 'processing', label: 'Processing' },
+  error:      { color: 'error',      label: 'Error'      },
+  success:    { color: 'success',    label: 'Success'    },
+  pending:    { color: 'pending',    label: 'Pending'    },
+  processing: { color: 'processing', label: 'Processing' },
 };
 
 export function FloatingTicket({ type, title, delay = 0 }) {
@@ -22,9 +22,6 @@ export function FloatingTicket({ type, title, delay = 0 }) {
       className={`ft ft--${cfg.color} ${visible ? 'ft--visible' : ''}`}
       style={{ transitionDelay: `${delay}s` }}
     >
-      <span className={`ft__icon ${type === 'processing' ? 'ft__icon--spin' : ''}`}>
-        {cfg.icon}
-      </span>
       <span className="ft__title">{title}</span>
     </div>
   );

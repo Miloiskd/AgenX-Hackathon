@@ -418,12 +418,30 @@
 .selected-ticket-detail {
   margin: 20px 0;
   padding: 16px;
-  background: var(--code-bg);
+  background: rgba(255, 255, 255, 0.04);
   border-radius: 8px;
   border: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.selected-ticket-detail .detail-row {
+  color: #e5e7eb;
+}
+
+.selected-ticket-detail .detail-label {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.selected-ticket-detail .detail-value {
+  color: #f9fafb;
+  text-align: left;
+  max-width: 100%;
+}
+
+.selected-ticket-detail .detail-description {
+  color: #e5e7eb;
 }
 
 .detail-row {
@@ -442,19 +460,19 @@
   font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
-  color: var(--text);
+  color: rgba(255, 255, 255, 0.72);
   letter-spacing: 0.4px;
   min-width: 80px;
 }
 
 .detail-value {
   font-size: 14px;
-  color: var(--text-h);
+  color: #f3f4f6;
 }
 
 .detail-description {
   font-size: 13px;
-  color: var(--text);
+  color: #e5e7eb;
   line-height: 1.5;
 }
 
@@ -1054,17 +1072,45 @@
   justify-content: center;
   background: var(--bg);
   padding: 24px;
+  position: relative;
+}
+
+.auth-shell {
+  width: 100%;
+  max-width: 420px;
 }
 
 .auth-card {
   width: 100%;
-  max-width: 420px;
   background: var(--bg);
   border: 2px solid var(--border);
   border-radius: 14px;
   padding: 40px 36px 32px;
   box-shadow: var(--shadow);
   animation: fadeIn 0.3s ease;
+}
+
+.auth-top-actions {
+  margin-bottom: 10px;
+}
+
+.auth-back-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 8px 14px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  background: transparent;
+  transition: border-color 0.2s ease, color 0.2s ease;
+}
+
+.auth-back-button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .auth-header {

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { registerApi } from '../services/api';
 
-export function RegisterPage({ onGoLogin }) {
+export function RegisterPage({ onGoLogin, onGoLanding }) {
   const { saveSession } = useAuth();
   const [name, setName]         = useState('');
   const [email, setEmail]       = useState('');
@@ -35,7 +35,14 @@ export function RegisterPage({ onGoLogin }) {
 
   return (
     <div className="auth-page">
-      <div className="auth-card">
+      <div className="auth-shell">
+        <div className="auth-top-actions">
+          <button type="button" className="auth-back-button" onClick={onGoLanding}>
+            {'<'} Back to landing
+          </button>
+        </div>
+
+        <div className="auth-card">
         <div className="auth-header">
           <h1 className="auth-logo">AgenX</h1>
           <p className="auth-subtitle">SRE Incident Intake System</p>
@@ -121,6 +128,7 @@ export function RegisterPage({ onGoLogin }) {
             Sign in
           </button>
         </p>
+        </div>
       </div>
     </div>
   );

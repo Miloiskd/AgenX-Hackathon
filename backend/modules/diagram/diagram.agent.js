@@ -21,7 +21,7 @@ const SERVICE_NAMES = {
 
 // Define the prompt template for diagram generation
 const diagramPrompt = PromptTemplate.fromTemplate(`
-You are an SRE system diagram expert. Given an incident, generate a clear description and an optimized image generation prompt for a system architecture diagram.
+You are an SRE system diagram expert specializing in Saleor e-commerce architecture. Generate a clear architecture diagram based on the Saleor codebase.
 
 Incident details:
 - Category: {category}
@@ -30,15 +30,23 @@ Incident details:
 - Possible cause: {possible_cause}
 - Affected service: {service_name}
 
-Rules:
-1. The flow must follow this sequence: User → Frontend → API → {service_name} → External API → Database
-2. Identify the failure point from the possible_cause and mark it clearly as (FAIL)
-3. The diagram_description must explain the flow and where the failure occurs in plain English
-4. The image_prompt must instruct the image model to create: a clean, professional, minimalist software architecture diagram on a white background, with labeled boxes and arrows, failure point highlighted in red
+SALEOR ARCHITECTURE REFERENCE:
+{saleor_context}
+
+DIAGRAM RULES:
+1. Base flow: User → Frontend → API Gateway → {service_name} → Database
+2. Include Saleor-specific modules from the code context
+3. Mark the failure point as (FAIL) based on the incident
+4. For payment incidents: show payment gateway integration
+5. For warehouse/product incidents: show warehouse models and stock sync
+6. For checkout incidents: show checkout flow with payment processing
+
+The diagram_description must explain the flow, affected Saleor modules, and failure point.
+The image_prompt must create a professional Saleor architecture diagram with the failure highlighted in red.
 
 Return a valid JSON object with exactly these two fields:
-- diagram_description: a plain English sentence describing the system flow and failure point
-- image_prompt: a detailed prompt for an image generation model (Nano Banana) that produces the architecture diagram
+- diagram_description: A plain English explanation of the Saleor system flow and failure point
+- image_prompt: A detailed prompt for image generation showing the Saleor architecture diagram
 
 Return ONLY the JSON object, no other text.
 `);
@@ -54,7 +62,7 @@ export const diagramChain = diagramPrompt.pipe(model).pipe(parser);
  * @param {{ category: string, priority: string, summary: string, possible_cause: string }} incident
  * @returns {Promise<{ diagram_description: string, image_prompt: string }>}
  */
-export async function runDiagramAgent(incident) {
+export async function runDiagramAgent(incident, saleorContext = null) {
   const { category, priority, summary, possible_cause } = incident;
 
   if (!category || !priority || !summary || !possible_cause) {
@@ -63,12 +71,30 @@ export async function runDiagramAgent(incident) {
 
   const service_name = SERVICE_NAMES[category?.toLowerCase()] ?? SERVICE_NAMES.other;
 
+  // Format Saleor context for AI
+  let saleor_context = '';
+  if (saleorContext && saleorContext.codeSnippets?.length > 0) {
+    saleor_context = `SALEOR CODE REFERENCE:\n${saleorContext.codeSnippets
+      .map(
+        (s) => `
+File: ${s.file}
+\`\`\`
+${s.content}
+\`\`\`
+`
+      )
+      .join('\n')}`;
+  } else {
+    saleor_context = 'No specific Saleor code context available.';
+  }
+
   const result = await diagramChain.invoke({
     category,
     priority,
     summary,
     possible_cause,
     service_name,
+    saleor_context,
   });
 
   if (!result.diagram_description || !result.image_prompt) {

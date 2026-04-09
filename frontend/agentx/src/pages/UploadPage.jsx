@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { submitTicket } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { ProcessingPipeline } from '../components/ProcessingPipeline';
 
 export function UploadPage() {
   const { user } = useAuth();
@@ -26,6 +27,11 @@ export function UploadPage() {
       const logsInput  = document.getElementById('logs-input');
       if (photoInput) photoInput.value = '';
       if (logsInput)  logsInput.value  = '';
+      
+      // Call onTicketSubmitted to show timeline (commented for now)
+      // if (onTicketSubmitted && result.id) {
+      //   onTicketSubmitted(result.id);
+      // }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -49,10 +55,20 @@ export function UploadPage() {
             id="ticket-text"
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder="Enter ticket description here..."
-            rows="8"
+            placeholder={`Example: The "Confirm Payment" button in checkout doesn't respond. Users click it and wait 15 seconds then get a timeout error. Affects ~45 orders in the last hour, mainly international customers.
+
+Include:
+• What exactly isn't working (payment, inventory, products, etc.)
+• When it started
+• How many users/orders are affected
+• Any error messages you see`}
+            rows="10"
             disabled={loading}
           />
+          <small style={{color: '#666', marginTop: '8px', display: 'block'}}>
+            💡 Tip: Be specific about affected Saleor modules (payment, checkout, warehouse, products, orders, etc.) 
+            so our AI can extract the right code context and provide faster fixes.
+          </small>
         </div>
 
         <div className="form-group">
@@ -85,6 +101,9 @@ export function UploadPage() {
           {loading ? 'Submitting...' : 'Submit'}
         </button>
       </form>
+
+      {/* Show pipeline while loading */}
+      {loading && <ProcessingPipeline />}
 
       {error && (
         <div className="alert alert-error">

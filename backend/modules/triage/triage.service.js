@@ -1,7 +1,8 @@
 import { runTriageChain } from './triage.chain.js';
 import { createTicket } from '../tickets/tickets.service.js';
 import { notifyReporterTicketCreated, notifyTeamNewTicket } from '../gmail/index.js';
-import { enrichIncident, isEcommerceRelated } from '../saleor/index.js';
+import { enrichIncident, isEcommerceRelated, extractEntities, automaticContextualize } from '../saleor/index.js';
+import { extractSaleorContext, formatContextForAI } from './saleor-context-extractor.js';
 
 /**
  * Process user input through triage and create a ticket
@@ -12,9 +13,20 @@ import { enrichIncident, isEcommerceRelated } from '../saleor/index.js';
  */
 export async function triageAndCreateTicket(userInput, emailOrAdditionalData = {}) {
   try {
-    // Step 1: Run the AI triage chain to classify the input
-    console.log('🔍 Triaging input...');
-    const triageResult = await runTriageChain(userInput);
+    // Step 0: Extract Saleor context BEFORE triage (source of truth)
+    console.log('📚 Extracting Saleor context as source of truth...');
+    let saleorCodeContext = null;
+    try {
+      saleorCodeContext = await extractSaleorContext(userInput);
+      console.log(`✅ Saleor context extracted (${saleorCodeContext.codeSnippets?.length || 0} code snippets)`);
+    } catch (err) {
+      console.warn('⚠️ Saleor context extraction failed (continuing):', err.message);
+    }
+
+    // Step 1: Run the AI triage chain with Saleor context
+    console.log('🔍 Triaging input with Saleor knowledge base...');
+    const { runTriageChainWithContext } = await import('./triage.chain.js');
+    const triageResult = await runTriageChainWithContext(userInput, saleorCodeContext);
     console.log('✅ Triage complete:', triageResult);
 
     // Step 2: Build ticket description with file info
@@ -33,15 +45,18 @@ export async function triageAndCreateTicket(userInput, emailOrAdditionalData = {
       }
     }
 
-    // Step 2.5: Saleor enrichment (e-commerce incidents only, non-blocking on failure)
+    // Step 2.5: Automatic Saleor contextualizer (e-commerce incidents only, non-blocking on failure)
+    // Extract entities automatically for deeper contextualization
     let saleorEnrichment = null;
     if (isEcommerceRelated(triageResult, userInput)) {
       try {
-        console.log('🛒 E-commerce incident — enriching with Saleor data...');
-        saleorEnrichment = await enrichIncident(userInput, triageResult);
-        console.log('✅ Saleor enrichment complete');
+        console.log('🛒 E-commerce incident detected — auto-contextualizing with Saleor data...');
+        const entities = extractEntities(userInput);
+        saleorEnrichment = await automaticContextualize(userInput, entities);
+        console.log('✅ Saleor auto-contextualizer complete');
       } catch (err) {
-        console.warn('⚠️  Saleor enrichment failed (continuing without it):', err.message);
+        console.warn('⚠️  Saleor auto-contextualizer failed (continuing without it):', err.message);
+        saleorEnrichment = null;
       }
     }
 
@@ -53,7 +68,8 @@ export async function triageAndCreateTicket(userInput, emailOrAdditionalData = {
       category: triageResult.category,
       priority: triageResult.priority,
       summary: triageResult.summary,
-      saleorEnrichment,
+      saleorEnrichment,  // ← Customer & order context
+      saleorCodeContext,  // ← Code references from Saleor repository
     });
     console.log('✅ Ticket created:', ticket.jiraKey);
 
@@ -68,7 +84,11 @@ export async function triageAndCreateTicket(userInput, emailOrAdditionalData = {
       .then(() => console.log('📧 Alert email sent to SRE team'))
       .catch((err) => console.error('⚠️  Failed to send team alert:', err.message));
 
-    return { ...ticket, saleorEnrichment };
+    return { 
+      ...ticket, 
+      saleorCodeContext,  // Code snippets from Saleor repository
+      saleorEnrichment,   // Customer & order context
+    };
   } catch (error) {
     console.error('Error in triage process:', error.message);
     throw new Error(`Failed to process ticket: ${error.message}`);

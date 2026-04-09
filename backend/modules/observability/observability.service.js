@@ -89,20 +89,20 @@ export async function getTicketLogs(ticketId, { category = 'other' } = {}) {
 /**
  * Run the full observability pipeline for a ticket:
  * 1. Get logs
- * 2. AI analysis
+ * 2. AI analysis WITH Saleor context
  * 3. Execute controlled action
  * 4. Validate result
  * 5. Persist resolution record
  */
-export async function analyzeAndResolve(ticketId, ticket) {
+export async function analyzeAndResolve(ticketId, ticket, saleorContext = null) {
   const { summary, category, priority } = ticket;
 
   // Step 1 — Get or generate logs
   const logs = await getTicketLogs(ticketId, { category });
   console.log(`🔍 [Observability] Analyzing logs for ticket ${ticketId}...`);
 
-  // Step 2 — AI analysis
-  const analysis = await runObservabilityAgent({ logs, summary, category, priority });
+  // Step 2 — AI analysis WITH Saleor context
+  const analysis = await runObservabilityAgent({ logs, summary, category, priority, saleorContext });
   console.log(`✅ [Observability] Analysis complete:`, analysis);
 
   // Step 3 — Execute controlled action (only if auto_fix = true)

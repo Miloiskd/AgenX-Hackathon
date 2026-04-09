@@ -1458,6 +1458,77 @@
   letter-spacing: 0.3px;
   text-transform: uppercase;
 }
+
+.resolution-badge--resolved {
+  background: rgba(34, 197, 94, 0.1);
+  color: #16a34a;
+}
+
+.resolution-badge--unresolved {
+  background: rgba(220, 38, 38, 0.1);
+  color: #dc2626;
+}
+
+/* Ticket card buttons */
+.ticket-card-footer {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+.ticket-card-footer button {
+  flex: 1;
+  min-width: 120px;
+}
+
+.assign-button {
+  background: var(--accent-bg);
+  color: var(--accent);
+  border: 2px solid var(--accent);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  padding: 8px 16px;
+}
+
+.assign-button:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.assign-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.resolve-button {
+  background: var(--accent-bg);
+  color: var(--accent);
+  border: 2px solid var(--accent);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  padding: 8px 16px;
+}
+
+.resolve-button:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--bg);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(170, 59, 255, 0.3);
+}
+
+.resolve-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+}
 .resolution-badge--resolved {
   background: rgba(16, 185, 129, 0.12);
   color: #059669;

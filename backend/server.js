@@ -9,6 +9,7 @@ import { assignTeam } from './modules/assignment/index.js';
 import { generateDiagram } from './modules/diagram/index.js';
 import { notifyReporterResolved } from './modules/gmail/index.js';
 import { enrichIncident } from './modules/saleor/saleor.enrichment.js';
+import { extractSaleorContext, formatContextForAI } from './modules/triage/saleor-context-extractor.js';
 import {
   getTicketLogs,
   analyzeAndResolve,
@@ -260,7 +261,12 @@ app.post('/diagram', requireAuth, moderateLimiter, async (req, res) => {
     if (!category || !priority || !summary || !possible_cause) {
       return res.status(400).json({ error: 'Validation failed', messages: ['Fields category, priority, summary, and possible_cause are required'] });
     }
-    const result = await generateDiagram({ category, priority, summary, possible_cause });
+
+    // Extract Saleor context from incident data
+    const incidentText = `${category} - ${summary} - ${possible_cause}`;
+    const saleorContext = await extractSaleorContext(incidentText);
+
+    const result = await generateDiagram({ category, priority, summary, possible_cause }, saleorContext);
     res.json({ success: true, ...result });
   } catch (error) {
     console.error('Error in /diagram:', error);
@@ -288,6 +294,56 @@ app.get('/tickets/:id/logs', requireAuth, moderateLimiter, async (req, res) => {
 });
 
 /**
+ * GET /tickets/:id
+ * Returns full ticket data for timeline display
+ */
+app.get('/tickets/:id', requireAuth, moderateLimiter, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const tickets = await getAllTickets();
+    const ticket = tickets.find((t) => t.id === id || t.jiraId === id);
+    if (!ticket) return res.status(404).json({ error: 'Not found', message: 'Ticket not found' });
+
+    // Extract Saleor context dynamically if needed (for timeline display)
+    let saleorCodeContext = null;
+    try {
+      saleorCodeContext = await extractSaleorContext(ticket.text || ticket.summary || '');
+    } catch (err) {
+      console.warn('⚠️  Failed to extract Saleor context on fetch:', err.message);
+    }
+
+    // Enrich with resolution status
+    const db = await getDbConnection();
+    const resolution = await db.get('SELECT * FROM resolutions WHERE ticket_id = ?', [id]);
+    
+    // Flatten resolution data into ticket object (for timeline component)
+    const enrichedTicket = {
+      ...ticket,
+      saleorCodeContext,  // Add Saleor context for timeline display
+      // Flatten resolution fields
+      root_cause: resolution?.root_cause || null,
+      affected_component: resolution?.affected_component || null,
+      solution: resolution?.solution || null,
+      action: resolution?.action || null,
+      auto_fix: resolution?.auto_fix === 1,
+      validation_resolved: resolution?.resolved === 1,
+      // Timeline timestamps
+      triage_started_at: ticket.created_at,
+      triage_completed_at: resolution?.created_at || null,
+      analysis_started_at: resolution?.created_at || null,
+      solution_timestamp: resolution?.created_at || null,
+      fixed_at: resolution?.resolved === 1 ? new Date().toISOString() : null,
+      resolved_at: resolution?.resolved === 1 ? new Date().toISOString() : null,
+    };
+
+    res.json({ success: true, ticket: enrichedTicket });
+  } catch (error) {
+    console.error('Error in GET /tickets/:id:', error);
+    res.status(500).json({ error: 'Failed to fetch ticket', message: 'Please try again later.' });
+  }
+});
+
+/**
  * POST /tickets/:id/resolve
  * AI-powered observability pipeline: analyze logs → propose fix → execute action → validate.
  */
@@ -298,7 +354,9 @@ app.post('/tickets/:id/resolve', requireAuth, moderateLimiter, async (req, res) 
     const ticket = tickets.find((t) => t.id === id || t.jiraId === id);
     if (!ticket) return res.status(404).json({ error: 'Not found', message: 'Ticket not found' });
 
-    const result = await analyzeAndResolve(id, ticket);
+    // Pass Saleor context if available from ticket
+    const saleorContext = ticket.saleorCodeContext || null;
+    const result = await analyzeAndResolve(id, ticket, saleorContext);
 
     // Non-blocking email notification if auto-resolved and reporterEmail provided
     const { reporterEmail } = req.body;
@@ -508,12 +566,37 @@ app.delete('/admin/engineers/:id', requireAuth, requireAdmin, async (req, res) =
 });
 
 /**
- * POST /saleor/enrich — enrich a ticket with Saleor data
+ * POST /saleor/auto-contextualize — automatically extract and contextualize with Saleor data
+ * This is the main endpoint for automatic ticket contextualization
+ */
+app.post('/saleor/auto-contextualize', requireAuth, async (req, res) => {
+  try {
+    const { incidentText } = req.body;
+    if (!incidentText) return res.status(400).json({ error: 'incidentText is required' });
+    
+    const { automaticContextualize, extractEntities } = await import('./modules/saleor/saleor.contextualizer.js');
+    const entities = extractEntities(incidentText);
+    const result = await automaticContextualize(incidentText, entities);
+    
+    res.json({
+      success: true,
+      context: result,
+      message: 'Ticket automatically contextualized with Saleor data',
+    });
+  } catch (err) {
+    console.error('Error in POST /saleor/auto-contextualize:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /saleor/enrich — (deprecated) use /saleor/auto-contextualize instead
  */
 app.post('/saleor/enrich', requireAuth, async (req, res) => {
   try {
     const { incidentText, category, priority, summary } = req.body;
     if (!incidentText) return res.status(400).json({ error: 'incidentText is required' });
+    const { enrichIncident } = await import('./modules/saleor/saleor.enrichment.js');
     const triageResult = { category, priority, summary };
     const result = await enrichIncident(incidentText, triageResult);
     res.json(result);

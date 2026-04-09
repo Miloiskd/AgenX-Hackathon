@@ -9,17 +9,28 @@ const model = new ChatOpenAI({
 });
 
 const observabilityPrompt = PromptTemplate.fromTemplate(`
-You are an SRE observability agent. Analyze the following system logs from a reported incident and provide a structured diagnosis.
+You are an SRE observability agent specialized in e-commerce systems. Analyze logs using real Saleor code context.
 
 Ticket Summary: {summary}
 Category: {category}
 Priority: {priority}
 
+SALEOR ARCHITECTURE REFERENCE:
+{saleor_context}
+
 System Logs:
 {logs}
 
+ANALYSIS INSTRUCTIONS:
+1. Use the provided Saleor code to understand affected components
+2. Match log patterns to specific Saleor modules (payment, checkout, product, warehouse, etc.)
+3. If logs mention database timeouts, check the warehouse/product models
+4. If payment errors, reference saleor/payment modules
+5. Cross-reference error codes and patterns with real Saleor code
+
 Analyze the logs and return a valid JSON object with exactly these fields:
 - root_cause: A concise description of the root cause detected in the logs (max 200 characters)
+- affected_component: Which Saleor module is affected (e.g., "saleor/payment", "saleor/warehouse")
 - solution: The recommended solution to fix the root cause (max 300 characters)
 - action: One of ["restart_service", "retry_request", "clear_cache", "none"]
   • restart_service — when logs show a crashed, unresponsive, or restarting service (CrashLoopBackOff, service down, process killed)
@@ -38,13 +49,31 @@ const observabilityChain = observabilityPrompt.pipe(model).pipe(parser);
 
 const VALID_ACTIONS = ['restart_service', 'retry_request', 'clear_cache', 'none'];
 
-export async function runObservabilityAgent({ logs, summary, category, priority }) {
+export async function runObservabilityAgent({ logs, summary, category, priority, saleorContext }) {
   try {
+    // Format Saleor context for AI
+    let saleor_context = '';
+    if (saleorContext && saleorContext.codeSnippets?.length > 0) {
+      saleor_context = `SALEOR CODE REFERENCE:\n${saleorContext.codeSnippets
+        .map(
+          (s) => `
+File: ${s.file}
+\`\`\`
+${s.content}
+\`\`\`
+`
+        )
+        .join('\n')}`;
+    } else {
+      saleor_context = 'No specific Saleor code context available.';
+    }
+
     const result = await observabilityChain.invoke({
       logs: logs.trim(),
       summary: summary || 'Unknown incident',
       category: category || 'other',
       priority: priority || 'medium',
+      saleor_context,
     });
 
     if (!VALID_ACTIONS.includes(result.action)) result.action = 'none';

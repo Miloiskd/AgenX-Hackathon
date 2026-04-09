@@ -9,8 +9,9 @@ import {
   updateTicketStatusApi,
 } from '../services/api';
 import { DiagramViewer } from '../components/DiagramViewer';
+import { AgentMarshallPipeline } from '../components/AgentMarshallPipeline';
 
-export function TicketsPage() {
+export function TicketsPage({ onViewTicket = null, onResolveTicket = null }) {
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -35,6 +36,7 @@ export function TicketsPage() {
   const [resolving, setResolving] = useState(false);
   const [resolveError, setResolveError] = useState(null);
   const [confirmedStatus, setConfirmedStatus] = useState(null); // 'resolved' | 'unresolved' | null
+  const [showAgentMarshall, setShowAgentMarshall] = useState(false); // Show Agent Marshall pipeline
 
   useEffect(() => {
     fetchTickets();
@@ -101,6 +103,7 @@ export function TicketsPage() {
     setResolveData(null);
     setResolveError(null);
     setConfirmedStatus(null);
+    setShowAgentMarshall(false);
   };
 
   const handleSaleorEnrich = async () => {
@@ -145,6 +148,7 @@ export function TicketsPage() {
 
   const handleResolve = async () => {
     if (!selectedTicket) return;
+    setShowAgentMarshall(true);
     setResolving(true);
     setResolveError(null);
     setResolveData(null);
@@ -361,7 +365,20 @@ export function TicketsPage() {
                 </div>
               )}
 
-              {resolveData && !confirmedStatus && (
+              {showAgentMarshall && (
+                <AgentMarshallPipeline 
+                  saleorContext={selectedTicket.saleorCodeContext}
+                  analysis={{
+                    category: selectedTicket.category,
+                    priority: selectedTicket.priority,
+                    root_cause: resolveData?.root_cause,
+                    solution: resolveData?.solution
+                  }}
+                  onComplete={() => setShowAgentMarshall(false)}
+                />
+              )}
+
+              {resolveData && !confirmedStatus && !showAgentMarshall && (
                 <div className="obs-result">
                   {/* Root cause */}
                   <div className="obs-result-card">

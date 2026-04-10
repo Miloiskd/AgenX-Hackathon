@@ -1,0 +1,70 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: agentx-backend
+    env_file:
+      - ./backend/.env
+    ports:
+      - "3000:3000"
+    depends_on:
+      - saleor-api
+    volumes:
+      - ./backend/db:/app/db
+      - ./saleor:/saleor:ro
+    environment:
+      - SALEOR_API_URL=http://saleor-api:8000/graphql/
+      - SALEOR_REPO_ROOT=/saleor
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend/agentx
+      dockerfile: Dockerfile
+    container_name: agentx-frontend
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+    restart: unless-stopped
+
+  saleor-db:
+    image: postgres:15-alpine
+    container_name: saleor-db
+    environment:
+      - POSTGRES_DB=saleor
+      - POSTGRES_USER=saleor
+      - POSTGRES_PASSWORD=saleor
+    volumes:
+      - saleor-db-data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  saleor-redis:
+    image: redis:7-alpine
+    container_name: saleor-redis
+    restart: unless-stopped
+
+  saleor-api:
+    build:
+      context: ./saleor
+      dockerfile: Dockerfile
+    container_name: saleor-api
+    command: sh -c "python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
+    depends_on:
+      - saleor-db
+      - saleor-redis
+    environment:
+      - DATABASE_URL=postgres://saleor:saleor@saleor-db:5432/saleor
+      - CELERY_BROKER_URL=redis://saleor-redis:6379/1
+      - SECRET_KEY=changeme
+      - ALLOWED_HOSTS=localhost,127.0.0.1,saleor-api,host.docker.internal
+      - DEBUG=1
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+volumes:
+  saleor-db-data:

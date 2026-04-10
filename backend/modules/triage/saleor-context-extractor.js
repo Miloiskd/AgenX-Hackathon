@@ -13,9 +13,12 @@
 import fs from 'fs';
 import path from 'path';
 
-// Saleor repository structure (assuming cloned at Proyecto/saleor/)
-// When running from backend, process.cwd() is /backend, so ../saleor is correct
-const SALEOR_ROOT = path.resolve(process.cwd(), '../saleor');
+// Saleor repository structure:
+// - Local dev (node from /backend): ../saleor
+// - Docker: mount host ./saleor at /saleor and set SALEOR_REPO_ROOT=/saleor
+const SALEOR_ROOT = process.env.SALEOR_REPO_ROOT
+  ? path.resolve(process.env.SALEOR_REPO_ROOT)
+  : path.resolve(process.cwd(), '../saleor');
 
 // Keyword mappings to Saleor components (English + Spanish)
 // Paths are relative to SALEOR_ROOT, which points to /Proyecto/saleor

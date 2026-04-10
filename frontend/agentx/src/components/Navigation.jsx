@@ -39,7 +39,7 @@ export function Navigation({ currentPage, setCurrentPage }) {
               className={`nav-button ${currentPage === 'assignment' ? 'active' : ''}`}
               onClick={() => setCurrentPage('assignment')}
             >
-              Asignación de Equipos
+              Team Assignment
             </button>
           </li>
           {isAdmin && (

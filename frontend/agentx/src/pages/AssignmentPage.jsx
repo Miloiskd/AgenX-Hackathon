@@ -57,11 +57,11 @@ export function AssignmentPage() {
   return (
     <div className="page-container">
       <div className="page-header">
-        <h2>Asignación de Equipos</h2>
+        <h2>Team Assignment</h2>
       </div>
 
       <p className="assignment-subtitle">
-        Selecciona un ticket y deja que el agente de IA asigne automáticamente el equipo más adecuado según la categoría, prioridad y habilidades disponibles.
+        Select a ticket and let the AI agent automatically assign the most suitable team based on category, priority, and available skills.
       </p>
 
       {error && (
@@ -73,15 +73,15 @@ export function AssignmentPage() {
       <div className="assignment-layout">
         {/* Ticket selector */}
         <div className="assignment-selector-card">
-          <h3>Seleccionar Ticket</h3>
+          <h3>Select Ticket</h3>
 
           {loadingTickets ? (
-            <p className="no-data">Cargando tickets...</p>
+            <p className="no-data">Loading tickets...</p>
           ) : tickets.length === 0 ? (
-            <p className="no-data">No hay tickets disponibles.</p>
+            <p className="no-data">No tickets available.</p>
           ) : (
             <div className="form-group">
-              <label htmlFor="ticket-select">Ticket de error</label>
+              <label htmlFor="ticket-select">Error ticket</label>
               <select
                 id="ticket-select"
                 className="ticket-select"
@@ -92,10 +92,10 @@ export function AssignmentPage() {
                   setError(null);
                 }}
               >
-                <option value="">-- Selecciona un ticket --</option>
+                <option value="">-- Select a ticket --</option>
                 {tickets.map((t) => (
                   <option key={t.id} value={t.id}>
-                    #{t.id} · {t.category || 'N/A'} · {t.priority || 'N/A'} · {t.summary || t.description?.slice(0, 50) || 'Sin descripción'}
+                    #{t.id} · {t.category || 'N/A'} · {t.priority || 'N/A'} · {t.summary || t.description?.slice(0, 50) || 'No description'}
                   </option>
                 ))}
               </select>
@@ -110,36 +110,36 @@ export function AssignmentPage() {
                 <span className="detail-value">{selectedTicket.id}</span>
               </div>
               <div className="detail-row">
-                <span className="detail-label">Categoría</span>
+                <span className="detail-label">Category</span>
                 <span className="detail-value">{selectedTicket.category || 'N/A'}</span>
               </div>
               <div className="detail-row">
-                <span className="detail-label">Prioridad</span>
+                <span className="detail-label">Priority</span>
                 <span className={`priority-badge ${priorityClass(selectedTicket.priority)}`}>
                   {selectedTicket.priority || 'N/A'}
                 </span>
               </div>
               <div className="detail-row">
-                <span className="detail-label">Estado</span>
+                <span className="detail-label">Status</span>
                 <span className={`status-badge status-${selectedTicket.status?.toLowerCase() || 'unknown'}`}>
                   {selectedTicket.status || 'Unknown'}
                 </span>
               </div>
               {selectedTicket.summary && (
                 <div className="detail-row detail-row--block">
-                  <span className="detail-label">Resumen</span>
+                  <span className="detail-label">Summary</span>
                   <span className="detail-value">{selectedTicket.summary}</span>
                 </div>
               )}
               {selectedTicket.description && (
                 <div className="detail-row detail-row--block">
-                  <span className="detail-label">Descripción</span>
+                  <span className="detail-label">Description</span>
                   <span className="detail-value detail-description">{selectedTicket.description}</span>
                 </div>
               )}
               {selectedTicket.assignedTeam && (
                 <div className="detail-row detail-row--block">
-                  <span className="detail-label">Equipo actual</span>
+                  <span className="detail-label">Current team</span>
                   <span className="detail-value">
                     {Array.isArray(selectedTicket.assignedTeam)
                       ? selectedTicket.assignedTeam.join(', ')
@@ -157,22 +157,22 @@ export function AssignmentPage() {
           >
             {assigning ? (
               <span className="button-loading">
-                <span className="spinner" /> Ejecutando agente...
+                <span className="spinner" /> Running agent...
               </span>
             ) : (
-              'Asignar Equipo con Agente IA'
+              'Assign Team with AI Agent'
             )}
           </button>
         </div>
 
         {/* Result panel */}
         <div className="assignment-result-card">
-          <h3>Resultado del Agente</h3>
+          <h3>Agent Result</h3>
 
           {!result && !assigning && (
             <div className="result-placeholder">
               <div className="result-placeholder-icon">🤖</div>
-              <p>El agente analizará las habilidades del equipo y seleccionará las personas más adecuadas para resolver el incidente.</p>
+              <p>The agent will analyze team skills and select the most suitable people to resolve the incident.</p>
             </div>
           )}
 
@@ -183,14 +183,14 @@ export function AssignmentPage() {
                 <div className="pulse-dot" />
                 <div className="pulse-dot" />
               </div>
-              <p>El agente está evaluando candidatos...</p>
+              <p>The agent is evaluating candidates...</p>
             </div>
           )}
 
           {result && (
             <div className="result-content">
               <div className="result-team-section">
-                <h4>Equipo Asignado</h4>
+                <h4>Assigned Team</h4>
                 <ul className="team-list">
                   {(result.team || []).map((member, i) => (
                     <li key={i} className="team-member">
@@ -201,11 +201,11 @@ export function AssignmentPage() {
                 </ul>
                 <div className="result-meta">
                   <span className="result-meta-item">
-                    <strong>Tamaño del equipo:</strong> {result.teamSize || result.team?.length}
+                    <strong>Team size:</strong> {result.teamSize || result.team?.length}
                   </span>
                   {result.candidatesEvaluated !== undefined && (
                     <span className="result-meta-item">
-                      <strong>Candidatos evaluados:</strong> {result.candidatesEvaluated}
+                      <strong>Evaluated candidates:</strong> {result.candidatesEvaluated}
                     </span>
                   )}
                 </div>
@@ -213,7 +213,7 @@ export function AssignmentPage() {
 
               {result.reason && (
                 <div className="result-reason">
-                  <h4>Razonamiento del Agente</h4>
+                  <h4>Agent Reasoning</h4>
                   <p>{result.reason}</p>
                 </div>
               )}

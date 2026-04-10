@@ -324,7 +324,7 @@ export function TicketsPage({ onViewTicket = null, onResolveTicket = null }) {
                       <span className="spinner" /> Analyzing &amp; resolving...
                     </span>
                   ) : (
-                    'Resolver problema'
+                    'Resolve issue'
                   )}
                 </button>
               )}
@@ -336,7 +336,7 @@ export function TicketsPage({ onViewTicket = null, onResolveTicket = null }) {
               )}
 
               {showAgentMarshall && (
-                <AgentMarshallPipeline 
+                <AgentMarshallPipeline
                   saleorContext={selectedTicket.saleorCodeContext}
                   analysis={{
                     category: selectedTicket.category,
@@ -383,19 +383,19 @@ export function TicketsPage({ onViewTicket = null, onResolveTicket = null }) {
 
                   {/* User confirmation */}
                   <div className="obs-confirm">
-                    <p className="obs-confirm-label">¿El problema fue resuelto?</p>
+                    <p className="obs-confirm-label">Was the issue resolved?</p>
                     <div className="obs-confirm-actions">
                       <button
                         className="obs-confirm-btn obs-confirm-btn--yes"
                         onClick={() => handleConfirmStatus(true)}
                       >
-                        Sí, está resuelto
+                        Yes, it's resolved
                       </button>
                       <button
                         className="obs-confirm-btn obs-confirm-btn--no"
                         onClick={() => handleConfirmStatus(false)}
                       >
-                        No, escalar
+                        No, escalate
                       </button>
                     </div>
                   </div>

@@ -22,13 +22,36 @@ export function DashboardPage() {
         const data = await getTickets();
         const ticketList = Array.isArray(data) ? data : [];
 
+        const isOpen = (t) => {
+          if (t.resolutionStatus === 'RESOLVED') return false;
+          const s = t.status?.toLowerCase() || '';
+          return !['done', 'closed', 'resolved'].includes(s);
+        };
+        const isClosed = (t) => {
+          if (t.resolutionStatus === 'RESOLVED') return true;
+          const s = t.status?.toLowerCase() || '';
+          return ['done', 'closed', 'resolved'].includes(s);
+        };
+        const isHigh = (p) => {
+          const prio = p?.toLowerCase() || '';
+          return ['highest', 'high', 'critical', 'blocker'].includes(prio);
+        };
+        const isMedium = (p) => {
+          const prio = p?.toLowerCase() || '';
+          return ['medium', 'major', 'normal', 'default'].includes(prio);
+        };
+        const isLow = (p) => {
+          const prio = p?.toLowerCase() || '';
+          return ['low', 'lowest', 'minor', 'trivial'].includes(prio);
+        };
+
         const newMetrics = {
           total: ticketList.length,
-          open: ticketList.filter((t) => t.status?.toLowerCase() === 'open').length,
-          closed: ticketList.filter((t) => t.status?.toLowerCase() === 'closed').length,
-          high: ticketList.filter((t) => t.priority?.toLowerCase() === 'high').length,
-          medium: ticketList.filter((t) => t.priority?.toLowerCase() === 'medium').length,
-          low: ticketList.filter((t) => t.priority?.toLowerCase() === 'low').length,
+          open: ticketList.filter((t) => isOpen(t)).length,
+          closed: ticketList.filter((t) => isClosed(t)).length,
+          high: ticketList.filter((t) => isHigh(t.priority)).length,
+          medium: ticketList.filter((t) => isMedium(t.priority)).length,
+          low: ticketList.filter((t) => isLow(t.priority)).length,
         };
 
         setMetrics(newMetrics);
